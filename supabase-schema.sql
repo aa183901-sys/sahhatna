@@ -1,9 +1,12 @@
 -- ============================================================
--- صحتنا (Sahatna) - Supabase Database Schema
+-- صحتنا (Sahatna) - Supabase Database Schema (Secure)
 -- Run this in Supabase SQL Editor after creating a project
+--
+-- SECURITY: Uses Supabase Auth (no plain-text passwords).
+--           Uses strict RLS policies (no "allow all").
 -- ============================================================
 
--- Enable UUID extension
+-- Enable extensions
 CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 
 -- ============================================================
@@ -139,35 +142,59 @@ CREATE TABLE IF NOT EXISTS reminders (
 );
 
 -- ============================================================
--- Clinic Users (For clinic dashboard login)
+-- Clinic Users (links Supabase Auth users to clinics)
+-- NO password column — authentication is handled by Supabase Auth
 -- ============================================================
 
 CREATE TABLE IF NOT EXISTS clinic_users (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   clinic_id UUID NOT NULL REFERENCES clinics(id) ON DELETE CASCADE,
-  username TEXT NOT NULL UNIQUE,
-  password TEXT NOT NULL, -- In production: use Supabase Auth instead
+  user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE, -- Supabase Auth user
+  username TEXT NOT NULL UNIQUE, -- For display + email mapping (username@sahatna.app)
   name TEXT NOT NULL,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
 -- ============================================================
--- Admin Users
+-- Admin Users (links Supabase Auth users to admin role)
+-- NO password column — authentication is handled by Supabase Auth
 -- ============================================================
 
 CREATE TABLE IF NOT EXISTS admin_users (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-  username TEXT NOT NULL UNIQUE,
-  password TEXT NOT NULL,
+  user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE, -- Supabase Auth user
+  username TEXT NOT NULL UNIQUE, -- For display + email mapping (username@sahatna.app)
   name TEXT NOT NULL,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
 -- ============================================================
--- Row Level Security (RLS) Policies
+-- RLS Helper Functions
 -- ============================================================
 
--- Public can read approved clinics, doctors, specialties, cities
+-- Get the clinic_id for the current authenticated clinic user
+CREATE OR REPLACE FUNCTION get_current_clinic_id()
+RETURNS UUID AS $$
+  SELECT clinic_id FROM clinic_users WHERE user_id = auth.uid() LIMIT 1;
+$$ LANGUAGE sql SECURITY DEFINER STABLE;
+
+-- Check if current user is an admin
+CREATE OR REPLACE FUNCTION is_admin()
+RETURNS BOOLEAN AS $$
+  SELECT EXISTS(SELECT 1 FROM admin_users WHERE user_id = auth.uid());
+$$ LANGUAGE sql SECURITY DEFINER STABLE;
+
+-- Check if current user is a clinic user (any clinic)
+CREATE OR REPLACE FUNCTION is_clinic_user()
+RETURNS BOOLEAN AS $$
+  SELECT EXISTS(SELECT 1 FROM clinic_users WHERE user_id = auth.uid());
+$$ LANGUAGE sql SECURITY DEFINER STABLE;
+
+-- ============================================================
+-- Row Level Security (RLS) — STRICT POLICIES
+-- ============================================================
+
+-- Enable RLS on all tables
 ALTER TABLE clinics ENABLE ROW LEVEL SECURITY;
 ALTER TABLE doctors ENABLE ROW LEVEL SECURITY;
 ALTER TABLE specialties ENABLE ROW LEVEL SECURITY;
@@ -179,27 +206,161 @@ ALTER TABLE reminders ENABLE ROW LEVEL SECURITY;
 ALTER TABLE clinic_users ENABLE ROW LEVEL SECURITY;
 ALTER TABLE admin_users ENABLE ROW LEVEL SECURITY;
 
--- Public read policies (for patient app)
-CREATE POLICY "Public can read approved clinics" ON clinics FOR SELECT USING (status = 'approved');
-CREATE POLICY "Public can read doctors" ON doctors FOR SELECT USING (true);
-CREATE POLICY "Public can read specialties" ON specialties FOR SELECT USING (true);
-CREATE POLICY "Public can read cities" ON cities FOR SELECT USING (true);
-CREATE POLICY "Public can read schedules" ON schedules FOR SELECT USING (true);
-CREATE POLICY "Public can read reviews" ON reviews FOR SELECT USING (true);
+-- Drop any old "Allow all" policies from previous schema versions
+DROP POLICY IF EXISTS "Allow all appointments" ON appointments;
+DROP POLICY IF EXISTS "Allow all reminders" ON reminders;
+DROP POLICY IF EXISTS "Allow all clinic_users" ON clinic_users;
+DROP POLICY IF EXISTS "Allow all admin_users" ON admin_users;
+DROP POLICY IF EXISTS "Allow all clinics manage" ON clinics;
+DROP POLICY IF EXISTS "Allow all doctors manage" ON doctors;
+DROP POLICY IF EXISTS "Allow all schedules manage" ON schedules;
 
--- Public can create appointments (booking)
-CREATE POLICY "Public can create appointments" ON appointments FOR INSERT WITH CHECK (true);
-CREATE POLICY "Public can create reviews" ON reviews FOR INSERT WITH CHECK (true);
-CREATE POLICY "Public can create clinics" ON clinics FOR INSERT WITH CHECK (true);
+-- ---- specialties & cities (public read, admin write) ----
+CREATE POLICY "Public read specialties" ON specialties FOR SELECT USING (true);
+CREATE POLICY "Admin manage specialties" ON specialties FOR ALL USING (is_admin()) WITH CHECK (is_admin());
 
--- For demo: allow all operations (tighten in production)
-CREATE POLICY "Allow all appointments" ON appointments FOR ALL USING (true) WITH CHECK (true);
-CREATE POLICY "Allow all reminders" ON reminders FOR ALL USING (true) WITH CHECK (true);
-CREATE POLICY "Allow all clinic_users" ON clinic_users FOR ALL USING (true) WITH CHECK (true);
-CREATE POLICY "Allow all admin_users" ON admin_users FOR ALL USING (true) WITH CHECK (true);
-CREATE POLICY "Allow all clinics manage" ON clinics FOR ALL USING (true) WITH CHECK (true);
-CREATE POLICY "Allow all doctors manage" ON doctors FOR ALL USING (true) WITH CHECK (true);
-CREATE POLICY "Allow all schedules manage" ON schedules FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Public read cities" ON cities FOR SELECT USING (true);
+CREATE POLICY "Admin manage cities" ON cities FOR ALL USING (is_admin()) WITH CHECK (is_admin());
+
+-- ---- clinics ----
+-- Public can see approved clinics; clinic can see own; admin can see all
+CREATE POLICY "Read clinics" ON clinics FOR SELECT
+  USING (status = 'approved' OR id = get_current_clinic_id() OR is_admin());
+-- Anyone can register a new clinic (status defaults to 'pending')
+CREATE POLICY "Public register clinic" ON clinics FOR INSERT WITH CHECK (true);
+-- Only admin can update/delete clinics (approve, reject, edit)
+CREATE POLICY "Admin update clinics" ON clinics FOR UPDATE USING (is_admin()) WITH CHECK (is_admin());
+CREATE POLICY "Admin delete clinics" ON clinics FOR DELETE USING (is_admin());
+
+-- ---- doctors ----
+-- Public can see all doctors (for search)
+CREATE POLICY "Public read doctors" ON doctors FOR SELECT USING (true);
+-- Only admin can insert/update/delete doctors
+CREATE POLICY "Admin manage doctors" ON doctors FOR INSERT WITH CHECK (is_admin());
+CREATE POLICY "Admin update doctors" ON doctors FOR UPDATE USING (is_admin()) WITH CHECK (is_admin());
+CREATE POLICY "Admin delete doctors" ON doctors FOR DELETE USING (is_admin());
+
+-- ---- schedules ----
+-- Public can see all schedules (to show available slots)
+CREATE POLICY "Public read schedules" ON schedules FOR SELECT USING (true);
+-- Clinic can manage schedules for their own doctors; admin can manage all
+CREATE POLICY "Clinic manage own schedules" ON schedules FOR ALL
+  USING (
+    doctor_id IN (SELECT id FROM doctors WHERE clinic_id = get_current_clinic_id())
+    OR is_admin()
+  )
+  WITH CHECK (
+    doctor_id IN (SELECT id FROM doctors WHERE clinic_id = get_current_clinic_id())
+    OR is_admin()
+  );
+
+-- ---- appointments ----
+-- Public (anon) can create bookings (INSERT only)
+CREATE POLICY "Public create appointments" ON appointments FOR INSERT WITH CHECK (true);
+-- Clinic can view & update their own appointments; admin can view & update all
+CREATE POLICY "Clinic view own appointments" ON appointments FOR SELECT
+  USING (clinic_id = get_current_clinic_id() OR is_admin());
+CREATE POLICY "Clinic update own appointments" ON appointments FOR UPDATE
+  USING (clinic_id = get_current_clinic_id() OR is_admin())
+  WITH CHECK (clinic_id = get_current_clinic_id() OR is_admin());
+-- Only admin can delete appointments
+CREATE POLICY "Admin delete appointments" ON appointments FOR DELETE USING (is_admin());
+
+-- ---- reviews ----
+-- Public can read reviews
+CREATE POLICY "Public read reviews" ON reviews FOR SELECT USING (true);
+-- Public can create reviews (verified check done in app logic)
+CREATE POLICY "Public create reviews" ON reviews FOR INSERT WITH CHECK (true);
+-- Only admin can delete reviews (moderation)
+CREATE POLICY "Admin delete reviews" ON reviews FOR DELETE USING (is_admin());
+
+-- ---- reminders ----
+-- Clinic can view reminders for their own appointments; admin can view all
+CREATE POLICY "Clinic view own reminders" ON reminders FOR SELECT
+  USING (
+    appointment_id IN (
+      SELECT a.id FROM appointments a
+      WHERE a.clinic_id = get_current_clinic_id()
+    )
+    OR is_admin()
+  );
+-- Clinic can update reminders (mark sent) for their own; admin can update all
+CREATE POLICY "Clinic update own reminders" ON reminders FOR UPDATE
+  USING (
+    appointment_id IN (
+      SELECT a.id FROM appointments a
+      WHERE a.clinic_id = get_current_clinic_id()
+    )
+    OR is_admin()
+  )
+  WITH CHECK (
+    appointment_id IN (
+      SELECT a.id FROM appointments a
+      WHERE a.clinic_id = get_current_clinic_id()
+    )
+    OR is_admin()
+  );
+-- Reminders are created automatically by app after booking (uses service_role or anon insert)
+CREATE POLICY "Create reminders" ON reminders FOR INSERT WITH CHECK (true);
+
+-- ---- clinic_users (NO public access) ----
+-- A user can only read their own clinic_users row (to get clinic_id after login)
+CREATE POLICY "User read own clinic_user" ON clinic_users FOR SELECT
+  USING (user_id = auth.uid());
+-- Only admin can insert/update/delete clinic_users
+CREATE POLICY "Admin manage clinic_users" ON clinic_users FOR ALL
+  USING (is_admin()) WITH CHECK (is_admin());
+
+-- ---- admin_users (NO public access) ----
+-- A user can only read their own admin_users row (to confirm admin role)
+CREATE POLICY "User read own admin_user" ON admin_users FOR SELECT
+  USING (user_id = auth.uid());
+-- Only admin can insert/update/delete admin_users
+CREATE POLICY "Admin manage admin_users" ON admin_users FOR ALL
+  USING (is_admin()) WITH CHECK (is_admin());
+
+-- ============================================================
+-- Demo Auth Users
+-- Creates auth.users entries so demo logins work out of the box.
+-- Email convention: username@sahatna.app
+-- Passwords: cl1/cl2/cl3 = "1234", admin = "admin123"
+-- ============================================================
+
+-- Clinic user: cl1 (مركز الشفاء)
+INSERT INTO auth.users (id, email, encrypted_password, email_confirmed_at, created_at, updated_at, aud, role)
+VALUES (
+  'e0000000-0000-0000-0000-000000000001',
+  'cl1@sahatna.app',
+  crypt('1234', gen_salt('bf')),
+  NOW(), NOW(), NOW(), 'authenticated', 'authenticated'
+) ON CONFLICT (id) DO NOTHING;
+
+-- Clinic user: cl2 (عيادة النور)
+INSERT INTO auth.users (id, email, encrypted_password, email_confirmed_at, created_at, updated_at, aud, role)
+VALUES (
+  'e0000000-0000-0000-0000-000000000002',
+  'cl2@sahatna.app',
+  crypt('1234', gen_salt('bf')),
+  NOW(), NOW(), NOW(), 'authenticated', 'authenticated'
+) ON CONFLICT (id) DO NOTHING;
+
+-- Clinic user: cl3 (مستشفى الحياة)
+INSERT INTO auth.users (id, email, encrypted_password, email_confirmed_at, created_at, updated_at, aud, role)
+VALUES (
+  'e0000000-0000-0000-0000-000000000003',
+  'cl3@sahatna.app',
+  crypt('1234', gen_salt('bf')),
+  NOW(), NOW(), NOW(), 'authenticated', 'authenticated'
+) ON CONFLICT (id) DO NOTHING;
+
+-- Admin user: admin
+INSERT INTO auth.users (id, email, encrypted_password, email_confirmed_at, created_at, updated_at, aud, role)
+VALUES (
+  'e0000000-0000-0000-0000-000000000004',
+  'admin@sahatna.app',
+  crypt('admin123', gen_salt('bf')),
+  NOW(), NOW(), NOW(), 'authenticated', 'authenticated'
+) ON CONFLICT (id) DO NOTHING;
 
 -- ============================================================
 -- Seed Data
@@ -283,16 +444,16 @@ INSERT INTO reviews (doctor_id, patient_name, patient_phone, rating, comment, ve
   ('b0000000-0000-0000-0000-000000000005','حسن كاظم','07901112266',4,'علاج الأسنان كان جيد والأسعار معقولة.',true)
 ON CONFLICT DO NOTHING;
 
--- Insert clinic users (demo)
-INSERT INTO clinic_users (clinic_id, username, password, name) VALUES
-  ('a0000000-0000-0000-0000-000000000001','cl1','1234','مدير مركز الشفاء'),
-  ('a0000000-0000-0000-0000-000000000002','cl2','1234','مدير عيادة النور'),
-  ('a0000000-0000-0000-0000-000000000003','cl3','1234','مدير مستشفى الحياة')
+-- Insert clinic_users (linked to auth.users — NO password column)
+INSERT INTO clinic_users (clinic_id, user_id, username, name) VALUES
+  ('a0000000-0000-0000-0000-000000000001','e0000000-0000-0000-0000-000000000001','cl1','مدير مركز الشفاء'),
+  ('a0000000-0000-0000-0000-000000000002','e0000000-0000-0000-0000-000000000002','cl2','مدير عيادة النور'),
+  ('a0000000-0000-0000-0000-000000000003','e0000000-0000-0000-0000-000000000003','cl3','مدير مستشفى الحياة')
 ON CONFLICT (username) DO NOTHING;
 
--- Insert admin user (demo)
-INSERT INTO admin_users (username, password, name) VALUES
-  ('admin','admin123','مدير صحتنا')
+-- Insert admin_users (linked to auth.users — NO password column)
+INSERT INTO admin_users (user_id, username, name) VALUES
+  ('e0000000-0000-0000-0000-000000000004','admin','مدير صحتنا')
 ON CONFLICT (username) DO NOTHING;
 
 -- ============================================================
@@ -305,3 +466,5 @@ CREATE INDEX IF NOT EXISTS idx_appointments_clinic ON appointments(clinic_id);
 CREATE INDEX IF NOT EXISTS idx_appointments_date ON appointments(date);
 CREATE INDEX IF NOT EXISTS idx_reviews_doctor ON reviews(doctor_id);
 CREATE INDEX IF NOT EXISTS idx_schedules_doctor ON schedules(doctor_id);
+CREATE INDEX IF NOT EXISTS idx_clinic_users_user ON clinic_users(user_id);
+CREATE INDEX IF NOT EXISTS idx_admin_users_user ON admin_users(user_id);

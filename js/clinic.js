@@ -1,4 +1,4 @@
-/**
+ /**
  * صحتنا - Clinic Dashboard Logic
  * Handles clinic login, bookings, calendar, doctors, schedule, and reminders.
  * All SahatnaDB calls are async (Supabase or localStorage).
@@ -65,7 +65,8 @@ async function handleClinicLogin(event) {
   }
 }
 
-function clinicLogout() {
+async function clinicLogout() {
+  await SahatnaDB.signOut();
   sessionStorage.removeItem('sahatna_clinic');
   currentClinic = null;
   currentClinicUser = null;

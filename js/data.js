@@ -508,20 +508,40 @@ const SahatnaDB = (function () {
   }
 
   // ---- Auth (async) -------------------------------------------------------
-  // NOTE: In production, replace with Supabase Auth (email + password).
-  // For now, we query the clinic_users / admin_users tables directly.
+  // Supabase mode: uses supabase.auth.signInWithPassword (no plain-text passwords).
+  // Email convention: username@sahatna.app
+  // localStorage mode: direct comparison (demo only, no real security).
   async function clinicLogin(username, password) {
     if (isSupabase()) {
-      const { data: user } = await _sb.from('clinic_users')
-        .select('*').eq('username', username).eq('password', password).single();
-      if (!user) return null;
+      // 1. Authenticate via Supabase Auth
+      const email = `${username}@sahatna.app`;
+      const { data: authData, error: authError } = await _sb.auth.signInWithPassword({
+        email,
+        password,
+      });
+      if (authError || !authData.user) return null;
+
+      // 2. Fetch the clinic_users row (now accessible via RLS: user_id = auth.uid())
+      const { data: clinicUser } = await _sb.from('clinic_users')
+        .select('*').eq('user_id', authData.user.id).single();
+      if (!clinicUser) return null;
+
+      // 3. Fetch the clinic details
       const { data: clinic } = await _sb.from('clinics')
-        .select('*').eq('id', user.clinic_id).single();
+        .select('*').eq('id', clinicUser.clinic_id).single();
+
       return {
-        user: { id: user.id, clinicId: user.clinic_id, username: user.username, name: user.name },
+        user: {
+          id: clinicUser.id,
+          clinicId: clinicUser.clinic_id,
+          userId: clinicUser.user_id,
+          username: clinicUser.username,
+          name: clinicUser.name,
+        },
         clinic: clinic ? mapClinic(clinic) : null,
       };
     }
+    // localStorage fallback (demo only)
     const db = loadLocal();
     const user = db.clinicUsers.find(
       (u) => u.username === username && u.password === password
@@ -535,14 +555,38 @@ const SahatnaDB = (function () {
 
   async function adminLogin(username, password) {
     if (isSupabase()) {
-      const { data } = await _sb.from('admin_users')
-        .select('*').eq('username', username).eq('password', password).single();
-      return data || null;
+      // 1. Authenticate via Supabase Auth
+      const email = `${username}@sahatna.app`;
+      const { data: authData, error: authError } = await _sb.auth.signInWithPassword({
+        email,
+        password,
+      });
+      if (authError || !authData.user) return null;
+
+      // 2. Fetch the admin_users row (now accessible via RLS: user_id = auth.uid())
+      const { data: adminUser } = await _sb.from('admin_users')
+        .select('*').eq('user_id', authData.user.id).single();
+      if (!adminUser) return null;
+
+      return {
+        id: adminUser.id,
+        userId: adminUser.user_id,
+        username: adminUser.username,
+        name: adminUser.name,
+      };
     }
+    // localStorage fallback (demo only)
     const db = loadLocal();
     return db.adminUsers.find(
       (u) => u.username === username && u.password === password
     ) || null;
+  }
+
+  // Sign out from Supabase Auth (no-op in localStorage mode)
+  async function signOut() {
+    if (isSupabase()) {
+      await _sb.auth.signOut();
+    }
   }
 
   // ---- Reminders (async) --------------------------------------------------
@@ -620,6 +664,7 @@ const SahatnaDB = (function () {
     addDoctor,
     clinicLogin,
     adminLogin,
+    signOut,
     getPendingReminders,
     markReminderSent,
     getStats,

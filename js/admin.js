@@ -65,7 +65,8 @@ async function handleAdminLogin(event) {
   }
 }
 
-function adminLogout() {
+async function adminLogout() {
+  await SahatnaDB.signOut();
   sessionStorage.removeItem('sahatna_admin');
   currentAdmin = null;
   document.getElementById('adminDashboard').classList.add('hidden');
