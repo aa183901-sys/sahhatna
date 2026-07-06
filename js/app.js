@@ -1,6 +1,7 @@
 /**
  * صحتنا - Patient App Logic
  * Handles search, filtering, doctor profiles, and booking flow.
+ * All SahatnaDB calls are async (Supabase or localStorage).
  */
 
 // ---- State ---------------------------------------------------------------
@@ -44,36 +45,28 @@ function renderStars(rating) {
 }
 
 function getServiceLabel(service) {
-  const labels = {
-    clinic: 'زيارة عيادة',
-    video: 'استشارة فيديو',
-    home: 'زيارة منزلية',
-  };
+  const labels = { clinic: 'زيارة عيادة', video: 'استشارة فيديو', home: 'زيارة منزلية' };
   return labels[service] || service;
 }
 
 function getServiceIcon(service) {
-  const icons = {
-    clinic: '🏥',
-    video: '📹',
-    home: '🏠',
-  };
+  const icons = { clinic: '🏥', video: '📹', home: '🏠' };
   return icons[service] || '🏥';
 }
 
 // ---- Initialization ------------------------------------------------------
-function initApp() {
-  populateCityDropdown();
-  populateSpecialtyDropdown();
-  renderSpecialtiesGrid();
-  renderStats();
-  renderDoctors();
+async function initApp() {
+  await populateCityDropdown();
+  await populateSpecialtyDropdown();
+  await renderSpecialtiesGrid();
+  await renderStats();
+  await renderDoctors();
   setupEventListeners();
   setupMobileMenu();
 }
 
-function populateCityDropdown() {
-  const db = SahatnaDB.load();
+async function populateCityDropdown() {
+  const db = await SahatnaDB.load();
   const select = document.getElementById('searchCity');
   db.cities.forEach((city) => {
     const opt = document.createElement('option');
@@ -83,8 +76,8 @@ function populateCityDropdown() {
   });
 }
 
-function populateSpecialtyDropdown() {
-  const db = SahatnaDB.load();
+async function populateSpecialtyDropdown() {
+  const db = await SahatnaDB.load();
   const select = document.getElementById('searchSpecialty');
   db.specialties.forEach((sp) => {
     const opt = document.createElement('option');
@@ -94,8 +87,8 @@ function populateSpecialtyDropdown() {
   });
 }
 
-function renderSpecialtiesGrid() {
-  const db = SahatnaDB.load();
+async function renderSpecialtiesGrid() {
+  const db = await SahatnaDB.load();
   const grid = document.getElementById('specialtiesGrid');
   grid.innerHTML = db.specialties
     .map(
@@ -109,8 +102,8 @@ function renderSpecialtiesGrid() {
     .join('');
 }
 
-function renderStats() {
-  const db = SahatnaDB.load();
+async function renderStats() {
+  const db = await SahatnaDB.load();
   document.getElementById('statDoctors').textContent = db.doctors.length;
   document.getElementById('statClinics').textContent =
     db.clinics.filter((c) => c.status === 'approved').length;
@@ -118,8 +111,8 @@ function renderStats() {
 }
 
 // ---- Search & Filter -----------------------------------------------------
-function getFilteredDoctors() {
-  const db = SahatnaDB.load();
+async function getFilteredDoctors() {
+  const db = await SahatnaDB.load();
   const nameQuery = document.getElementById('searchName').value.trim().toLowerCase();
   const cityId = document.getElementById('searchCity').value;
   const specialtyId = document.getElementById('searchSpecialty').value;
@@ -129,12 +122,11 @@ function getFilteredDoctors() {
   const filterFemale = document.getElementById('filterFemale').checked;
   const sortBy = document.getElementById('sortBy').value;
 
-  let doctors = db.doctors.filter((d) => {
-    // Only show doctors from approved clinics
+  // Pre-fetch all data to avoid async-in-filter issues
+  const doctors = db.doctors.filter((d) => {
     const clinic = db.clinics.find((c) => c.id === d.clinicId);
     if (!clinic || clinic.status !== 'approved') return false;
 
-    // Name search
     if (nameQuery) {
       const sp = db.specialties.find((s) => s.id === d.specialtyId);
       const matches =
@@ -144,41 +136,35 @@ function getFilteredDoctors() {
       if (!matches) return false;
     }
 
-    // City filter
     if (cityId && clinic.cityId !== cityId) return false;
-
-    // Specialty filter
     if (specialtyId && d.specialtyId !== specialtyId) return false;
-
-    // Service filters
     if (filterVideo && !d.services.includes('video')) return false;
     if (filterHome && !d.services.includes('home')) return false;
-
-    // Gender filter
     if (filterFemale && d.gender !== 'female') return false;
-
-    // Today filter
-    if (filterToday) {
-      const today = new Date().toISOString().slice(0, 10);
-      const slots = SahatnaDB.getAvailableSlots(d.id, today);
-      if (slots.length === 0) return false;
-    }
 
     return true;
   });
 
+  // Handle "today" filter asynchronously
+  if (filterToday) {
+    const today = new Date().toISOString().slice(0, 10);
+    const filtered = [];
+    for (const d of doctors) {
+      const slots = await SahatnaDB.getAvailableSlots(d.id, today);
+      if (slots.length > 0) filtered.push(d);
+    }
+    doctors.length = 0;
+    doctors.push(...filtered);
+  }
+
   // Sort
   doctors.sort((a, b) => {
     switch (sortBy) {
-      case 'price-low':
-        return a.price - b.price;
-      case 'price-high':
-        return b.price - a.price;
-      case 'experience':
-        return b.experienceYears - a.experienceYears;
+      case 'price-low': return a.price - b.price;
+      case 'price-high': return b.price - a.price;
+      case 'experience': return b.experienceYears - a.experienceYears;
       case 'rating':
-      default:
-        return b.rating - a.rating;
+      default: return b.rating - a.rating;
     }
   });
 
@@ -188,8 +174,8 @@ function getFilteredDoctors() {
   return doctors;
 }
 
-function renderDoctors() {
-  const doctors = getFilteredDoctors();
+async function renderDoctors() {
+  const doctors = await getFilteredDoctors();
   const list = document.getElementById('doctorsList');
   const countEl = document.getElementById('resultsCount');
 
@@ -206,37 +192,33 @@ function renderDoctors() {
     return;
   }
 
-  list.innerHTML = doctors
-    .map((doctor) => {
-      const specialty = SahatnaDB.getSpecialty(doctor.specialtyId);
-      const clinic = SahatnaDB.getClinic(doctor.clinicId);
-      const city = clinic ? SahatnaDB.getCity(clinic.cityId) : null;
-      const today = new Date().toISOString().slice(0, 10);
-      const todaySlots = SahatnaDB.getAvailableSlots(doctor.id, today);
+  const db = await SahatnaDB.load();
+  const today = new Date().toISOString().slice(0, 10);
 
-      return `
+  // Build cards with async slot check
+  const cards = [];
+  for (const doctor of doctors) {
+    const specialty = db.specialties.find((s) => s.id === doctor.specialtyId);
+    const clinic = db.clinics.find((c) => c.id === doctor.clinicId);
+    const city = clinic ? db.cities.find((c) => c.id === clinic.cityId) : null;
+    const todaySlots = await SahatnaDB.getAvailableSlots(doctor.id, today);
+
+    cards.push(`
       <div class="doctor-card bg-white rounded-2xl p-4 cursor-pointer animate-fade-in" onclick="openDoctorModal('${doctor.id}')">
         <div class="flex gap-4">
-          <!-- Photo -->
           <div class="relative flex-shrink-0">
             <img src="${doctor.photo}" alt="${doctor.name}" class="w-20 h-20 rounded-2xl object-cover" />
             ${doctor.verified ? '<div class="verified-badge absolute -bottom-1 -left-1" title="طبيب موثّق">✓</div>' : ''}
           </div>
-
-          <!-- Info -->
           <div class="flex-1 min-w-0">
             <div class="flex items-start justify-between gap-2">
               <div>
                 <h4 class="font-bold text-gray-800 truncate">${doctor.name}</h4>
                 <p class="text-sm text-primary font-medium">${specialty ? specialty.name : ''}</p>
-                <p class="text-xs text-gray-500 mt-1">
-                  📍 ${clinic ? clinic.area : ''}، ${city ? city.name : ''}
-                </p>
+                <p class="text-xs text-gray-500 mt-1">📍 ${clinic ? clinic.area : ''}، ${city ? city.name : ''}</p>
               </div>
               ${doctor.featured ? '<span class="badge badge-warning flex-shrink-0">⭐ مميز</span>' : ''}
             </div>
-
-            <!-- Rating & Stats -->
             <div class="flex items-center gap-3 mt-2 text-sm">
               <span class="flex items-center gap-1">
                 ${renderStars(doctor.rating)}
@@ -246,13 +228,9 @@ function renderDoctors() {
               <span class="text-gray-300">|</span>
               <span class="text-gray-500 text-xs">خبرة ${doctor.experienceYears} سنة</span>
             </div>
-
-            <!-- Services -->
             <div class="flex flex-wrap gap-1 mt-2">
               ${doctor.services.map((s) => `<span class="badge badge-primary text-xs">${getServiceIcon(s)} ${getServiceLabel(s)}</span>`).join('')}
             </div>
-
-            <!-- Price & Availability -->
             <div class="flex items-center justify-between mt-3 pt-3 border-t border-gray-100">
               <div>
                 <span class="text-xs text-gray-400">سعر الكشف</span>
@@ -267,9 +245,9 @@ function renderDoctors() {
           </div>
         </div>
       </div>
-    `;
-    })
-    .join('');
+    `);
+  }
+  list.innerHTML = cards.join('');
 }
 
 function filterBySpecialty(specialtyId) {
@@ -279,21 +257,21 @@ function filterBySpecialty(specialtyId) {
 }
 
 // ---- Doctor Profile Modal & Booking --------------------------------------
-function openDoctorModal(doctorId) {
+async function openDoctorModal(doctorId) {
   currentDoctorId = doctorId;
   currentSelectedDate = null;
   currentSelectedTime = null;
   currentSelectedService = 'clinic';
 
-  const doctor = SahatnaDB.getDoctor(doctorId);
+  const doctor = await SahatnaDB.getDoctor(doctorId);
   if (!doctor) return;
 
-  const specialty = SahatnaDB.getSpecialty(doctor.specialtyId);
-  const clinic = SahatnaDB.getClinic(doctor.clinicId);
-  const city = clinic ? SahatnaDB.getCity(clinic.cityId) : null;
-  const db = SahatnaDB.load();
+  const specialty = await SahatnaDB.getSpecialty(doctor.specialtyId);
+  const clinic = await SahatnaDB.getClinic(doctor.clinicId);
+  const city = clinic ? await SahatnaDB.getCity(clinic.cityId) : null;
+  const db = await SahatnaDB.load();
   const reviews = db.reviews.filter((r) => r.doctorId === doctorId);
-  const days = SahatnaDB.getAvailableDays(doctorId, 14);
+  const days = await SahatnaDB.getAvailableDays(doctorId, 14);
 
   const modal = document.getElementById('doctorModal');
   modal.classList.remove('hidden');
@@ -452,7 +430,6 @@ function closeDoctorModal() {
 
 function selectService(service) {
   currentSelectedService = service;
-  // Update UI
   document.querySelectorAll('.service-btn').forEach((btn) => {
     btn.classList.remove('selected');
     btn.style.background = '';
@@ -468,12 +445,11 @@ function selectService(service) {
   }
 }
 
-function selectDate(dateStr) {
+async function selectDate(dateStr) {
   if (!currentDoctorId) return;
   currentSelectedDate = dateStr;
   currentSelectedTime = null;
 
-  // Update day button UI
   document.querySelectorAll('.day-btn').forEach((btn) => {
     btn.classList.remove('selected');
   });
@@ -482,8 +458,7 @@ function selectDate(dateStr) {
     dayBtn.classList.add('selected');
   }
 
-  // Render time slots
-  const slots = SahatnaDB.getAvailableSlots(currentDoctorId, dateStr);
+  const slots = await SahatnaDB.getAvailableSlots(currentDoctorId, dateStr);
   const container = document.getElementById('timeSlotsContainer');
 
   if (slots.length === 0) {
@@ -534,32 +509,28 @@ function updateBookButton() {
 }
 
 // ---- Booking Form --------------------------------------------------------
-function openBookingForm() {
+async function openBookingForm() {
   if (!currentSelectedDate || !currentSelectedTime || !currentDoctorId) return;
 
-  const doctor = SahatnaDB.getDoctor(currentDoctorId);
-  const clinic = SahatnaDB.getClinic(doctor.clinicId);
+  const doctor = await SahatnaDB.getDoctor(currentDoctorId);
+  const clinic = await SahatnaDB.getClinic(doctor.clinicId);
   const dayName = SahatnaDB.getDayName(new Date(currentSelectedDate + 'T00:00:00').getDay());
 
   const modal = document.getElementById('doctorModal');
   modal.innerHTML = `
     <div class="modal-overlay" onclick="if(event.target===this) closeDoctorModal()">
       <div class="modal-content">
-        <!-- Header -->
         <div class="bg-primary text-white p-5 rounded-t-2xl">
           <h3 class="text-lg font-bold">تأكيد الحجز</h3>
           <p class="text-teal-100 text-sm mt-1">أدخل بياناتك لتأكيد الموعد</p>
         </div>
-
-        <!-- Body -->
         <div class="p-6">
-          <!-- Booking Summary -->
           <div class="bg-primary-lighter rounded-xl p-4 mb-4">
             <div class="flex items-center gap-3 mb-3">
               <img src="${doctor.photo}" class="w-14 h-14 rounded-xl object-cover" />
               <div>
                 <h4 class="font-bold text-gray-800">${doctor.name}</h4>
-                <p class="text-sm text-gray-600">${SahatnaDB.getSpecialty(doctor.specialtyId).name}</p>
+                <p class="text-sm text-gray-600">${(await SahatnaDB.getSpecialty(doctor.specialtyId)).name}</p>
               </div>
             </div>
             <div class="grid grid-cols-2 gap-2 text-sm">
@@ -584,8 +555,6 @@ function openBookingForm() {
               </div>
             </div>
           </div>
-
-          <!-- Patient Info Form -->
           <form id="bookingForm" onsubmit="confirmBooking(event)">
             <div class="space-y-3">
               <div>
@@ -605,8 +574,6 @@ function openBookingForm() {
                 <label class="block text-sm font-semibold text-gray-600 mb-1">ملاحظات (اختياري)</label>
                 <textarea id="patientNotes" rows="2" placeholder="أعراض أو معلومات تريد إخبار الطبيب عنها" class="form-input"></textarea>
               </div>
-
-              <!-- Payment Method -->
               <div>
                 <label class="block text-sm font-semibold text-gray-600 mb-2">طريقة الدفع</label>
                 <div class="grid grid-cols-1 gap-2">
@@ -620,15 +587,9 @@ function openBookingForm() {
                 </div>
               </div>
             </div>
-
-            <!-- Actions -->
             <div class="flex gap-3 mt-6">
-              <button type="button" onclick="openDoctorModal('${currentDoctorId}')" class="btn-secondary flex-1">
-                رجوع
-              </button>
-              <button type="submit" class="btn-primary flex-1">
-                تأكيد الحجز
-              </button>
+              <button type="button" onclick="openDoctorModal('${currentDoctorId}')" class="btn-secondary flex-1">رجوع</button>
+              <button type="submit" class="btn-primary flex-1">تأكيد الحجز</button>
             </div>
           </form>
         </div>
@@ -637,7 +598,7 @@ function openBookingForm() {
   `;
 }
 
-function confirmBooking(event) {
+async function confirmBooking(event) {
   event.preventDefault();
 
   const patientName = document.getElementById('patientName').value.trim();
@@ -650,9 +611,9 @@ function confirmBooking(event) {
     return;
   }
 
-  const doctor = SahatnaDB.getDoctor(currentDoctorId);
+  const doctor = await SahatnaDB.getDoctor(currentDoctorId);
 
-  const booking = SahatnaDB.createBooking({
+  const booking = await SahatnaDB.createBooking({
     doctorId: currentDoctorId,
     clinicId: doctor.clinicId,
     patientName,
@@ -668,10 +629,11 @@ function confirmBooking(event) {
   showBookingSuccess(booking, doctor);
 }
 
-function showBookingSuccess(booking, doctor) {
-  const clinic = SahatnaDB.getClinic(doctor.clinicId);
+async function showBookingSuccess(booking, doctor) {
+  const clinic = await SahatnaDB.getClinic(doctor.clinicId);
   const dayName = SahatnaDB.getDayName(new Date(booking.date + 'T00:00:00').getDay());
   const timeParts = booking.time.split(':').map(Number);
+  const specialty = await SahatnaDB.getSpecialty(doctor.specialtyId);
 
   const modal = document.getElementById('successModal');
   modal.classList.remove('hidden');
@@ -679,66 +641,36 @@ function showBookingSuccess(booking, doctor) {
     <div class="modal-overlay" onclick="if(event.target===this) closeSuccessModal()">
       <div class="modal-content text-center">
         <div class="p-8">
-          <!-- Success Icon -->
           <div class="w-20 h-20 bg-success-light rounded-full flex items-center justify-center mx-auto mb-4 animate-scale-in">
             <svg class="w-12 h-12 text-success" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7" />
             </svg>
           </div>
-
           <h3 class="text-2xl font-bold text-gray-800 mb-2">تم تأكيد حجزك بنجاح! 🎉</h3>
           <p class="text-gray-500 mb-6">سيصلك تذكير برسالة نصية قبل الموعد</p>
-
-          <!-- Booking Details -->
           <div class="bg-gray-50 rounded-xl p-4 text-right mb-6">
             <div class="flex items-center gap-3 mb-3 pb-3 border-b border-gray-200">
               <img src="${doctor.photo}" class="w-12 h-12 rounded-xl object-cover" />
               <div>
                 <h4 class="font-bold text-gray-800">${doctor.name}</h4>
-                <p class="text-sm text-gray-500">${SahatnaDB.getSpecialty(doctor.specialtyId).name}</p>
+                <p class="text-sm text-gray-500">${specialty ? specialty.name : ''}</p>
               </div>
             </div>
             <div class="space-y-2 text-sm">
-              <div class="flex justify-between">
-                <span class="text-gray-400">رقم الحجز:</span>
-                <span class="font-bold text-primary">#${booking.id}</span>
-              </div>
-              <div class="flex justify-between">
-                <span class="text-gray-400">التاريخ:</span>
-                <span class="font-semibold">${dayName} ${booking.date}</span>
-              </div>
-              <div class="flex justify-between">
-                <span class="text-gray-400">الوقت:</span>
-                <span class="font-semibold">${SahatnaDB.formatTime(timeParts[0], timeParts[1])}</span>
-              </div>
-              <div class="flex justify-between">
-                <span class="text-gray-400">العيادة:</span>
-                <span class="font-semibold">${clinic.name}</span>
-              </div>
-              <div class="flex justify-between">
-                <span class="text-gray-400">العنوان:</span>
-                <span class="font-semibold text-xs">${clinic.address}</span>
-              </div>
-              <div class="flex justify-between">
-                <span class="text-gray-400">طريقة الدفع:</span>
-                <span class="font-semibold">ادفع بالعيادة</span>
-              </div>
-              <div class="flex justify-between pt-2 border-t border-gray-200">
-                <span class="text-gray-400">السعر:</span>
-                <span class="font-bold text-primary">${formatPrice(doctor.price)}</span>
-              </div>
+              <div class="flex justify-between"><span class="text-gray-400">رقم الحجز:</span><span class="font-bold text-primary">#${booking.id}</span></div>
+              <div class="flex justify-between"><span class="text-gray-400">التاريخ:</span><span class="font-semibold">${dayName} ${booking.date}</span></div>
+              <div class="flex justify-between"><span class="text-gray-400">الوقت:</span><span class="font-semibold">${SahatnaDB.formatTime(timeParts[0], timeParts[1])}</span></div>
+              <div class="flex justify-between"><span class="text-gray-400">العيادة:</span><span class="font-semibold">${clinic.name}</span></div>
+              <div class="flex justify-between"><span class="text-gray-400">العنوان:</span><span class="font-semibold text-xs">${clinic.address}</span></div>
+              <div class="flex justify-between"><span class="text-gray-400">طريقة الدفع:</span><span class="font-semibold">ادفع بالعيادة</span></div>
+              <div class="flex justify-between pt-2 border-t border-gray-200"><span class="text-gray-400">السعر:</span><span class="font-bold text-primary">${formatPrice(doctor.price)}</span></div>
             </div>
           </div>
-
-          <!-- Reminder note -->
           <div class="bg-info-light rounded-xl p-3 mb-6 text-sm text-info flex items-center gap-2 justify-center">
             <span>📱</span>
             <span>سيصلك تذكير على الرقم ${booking.patientPhone} قبل الموعد</span>
           </div>
-
-          <button onclick="closeSuccessModal()" class="btn-primary w-full">
-            تم
-          </button>
+          <button onclick="closeSuccessModal()" class="btn-primary w-full">تم</button>
         </div>
       </div>
     </div>
@@ -754,8 +686,8 @@ function closeSuccessModal() {
 }
 
 // ---- Clinic Registration Modal -------------------------------------------
-function openRegisterModal() {
-  const db = SahatnaDB.load();
+async function openRegisterModal() {
+  const db = await SahatnaDB.load();
   const modal = document.getElementById('registerModal');
   modal.classList.remove('hidden');
   modal.innerHTML = `
@@ -768,7 +700,6 @@ function openRegisterModal() {
           </div>
           <button onclick="closeRegisterModal()" class="text-white/80 hover:text-white text-2xl">✕</button>
         </div>
-
         <div class="p-6">
           <form onsubmit="submitClinicRegistration(event)">
             <div class="space-y-3">
@@ -814,7 +745,7 @@ function closeRegisterModal() {
   document.getElementById('registerModal').innerHTML = '';
 }
 
-function submitClinicRegistration(event) {
+async function submitClinicRegistration(event) {
   event.preventDefault();
   const name = document.getElementById('regClinicName').value.trim();
   const cityId = document.getElementById('regCity').value;
@@ -827,26 +758,22 @@ function submitClinicRegistration(event) {
     return;
   }
 
-  SahatnaDB.addClinic({ name, cityId, area, address, phone, lat: 0, lng: 0 });
+  await SahatnaDB.addClinic({ name, cityId, area, address, phone, lat: 0, lng: 0 });
   closeRegisterModal();
   showToast('تم إرسال طلب التسجيل بنجاح! سنتواصل معك قريباً.', 'success');
 }
 
 // ---- Event Listeners -----------------------------------------------------
 function setupEventListeners() {
-  // Search inputs
   document.getElementById('searchName').addEventListener('input', renderDoctors);
   document.getElementById('searchCity').addEventListener('change', renderDoctors);
   document.getElementById('searchSpecialty').addEventListener('change', renderDoctors);
   document.getElementById('sortBy').addEventListener('change', renderDoctors);
-
-  // Filters
   document.getElementById('filterToday').addEventListener('change', renderDoctors);
   document.getElementById('filterVideo').addEventListener('change', renderDoctors);
   document.getElementById('filterHome').addEventListener('change', renderDoctors);
   document.getElementById('filterFemale').addEventListener('change', renderDoctors);
 
-  // Clear filters
   document.getElementById('clearFilters').addEventListener('click', () => {
     document.getElementById('searchName').value = '';
     document.getElementById('searchCity').value = '';
@@ -858,7 +785,6 @@ function setupEventListeners() {
     renderDoctors();
   });
 
-  // ESC to close modals
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') {
       closeDoctorModal();
@@ -874,7 +800,6 @@ function setupMobileMenu() {
   btn.addEventListener('click', () => {
     menu.classList.toggle('hidden');
   });
-  // Close menu when a link is clicked
   menu.querySelectorAll('a').forEach((link) => {
     link.addEventListener('click', () => menu.classList.add('hidden'));
   });

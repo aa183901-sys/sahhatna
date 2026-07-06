@@ -1,6 +1,7 @@
 /**
  * صحتنا - Clinic Dashboard Logic
  * Handles clinic login, bookings, calendar, doctors, schedule, and reminders.
+ * All SahatnaDB calls are async (Supabase or localStorage).
  */
 
 // ---- State ---------------------------------------------------------------
@@ -47,12 +48,12 @@ function getServiceLabel(service) {
 }
 
 // ---- Auth ----------------------------------------------------------------
-function handleClinicLogin(event) {
+async function handleClinicLogin(event) {
   event.preventDefault();
   const username = document.getElementById('loginUsername').value.trim();
   const password = document.getElementById('loginPassword').value.trim();
 
-  const result = SahatnaDB.clinicLogin(username, password);
+  const result = await SahatnaDB.clinicLogin(username, password);
   if (result) {
     currentClinicUser = result.user;
     currentClinic = result.clinic;
@@ -73,13 +74,14 @@ function clinicLogout() {
   showToast('تم تسجيل الخروج', 'info');
 }
 
-function checkClinicSession() {
+async function checkClinicSession() {
   const saved = sessionStorage.getItem('sahatna_clinic');
   if (saved) {
     try {
       const { userId, clinicId } = JSON.parse(saved);
-      const db = SahatnaDB.load();
-      const user = db.clinicUsers.find((u) => u.id === userId);
+      const db = await SahatnaDB.load();
+      // For localStorage mode, find user in clinicUsers
+      const user = db.clinicUsers ? db.clinicUsers.find((u) => u.id === userId) : { id: userId, clinicId, name: 'مدير العيادة' };
       const clinic = db.clinics.find((c) => c.id === clinicId);
       if (user && clinic) {
         currentClinicUser = user;
@@ -93,29 +95,28 @@ function checkClinicSession() {
 }
 
 // ---- Dashboard -----------------------------------------------------------
-function showDashboard() {
+async function showDashboard() {
   document.getElementById('loginScreen').classList.add('hidden');
   document.getElementById('dashboard').classList.remove('hidden');
 
-  // Set header info
   document.getElementById('clinicNameHeader').textContent = currentClinic.name;
-  document.getElementById('welcomeMsg').textContent = 'مرحباً، ' + currentClinicUser.name;
-  const city = SahatnaDB.getCity(currentClinic.cityId);
+  document.getElementById('welcomeMsg').textContent = 'مرحباً، ' + (currentClinicUser.name || 'مدير العيادة');
+  const city = await SahatnaDB.getCity(currentClinic.cityId);
   document.getElementById('clinicInfo').textContent =
     `${currentClinic.area}، ${city ? city.name : ''} • ${currentClinic.phone}`;
 
-  renderClinicStats();
-  populateBookingFilters();
-  renderBookingsList();
-  renderClinicDoctors();
-  populateScheduleDoctorSelect();
-  renderReminders();
+  await renderClinicStats();
+  await populateBookingFilters();
+  await renderBookingsList();
+  await renderClinicDoctors();
+  await populateScheduleDoctorSelect();
+  await renderReminders();
 }
 
-function renderClinicStats() {
-  const bookings = SahatnaDB.getBookingsByClinic(currentClinic.id);
+async function renderClinicStats() {
+  const bookings = await SahatnaDB.getBookingsByClinic(currentClinic.id);
   const today = new Date().toISOString().slice(0, 10);
-  const db = SahatnaDB.load();
+  const db = await SahatnaDB.load();
   const doctors = db.doctors.filter((d) => d.clinicId === currentClinic.id);
 
   document.getElementById('statTodayBookings').textContent =
@@ -142,8 +143,8 @@ function switchTab(tabName) {
 }
 
 // ---- Bookings List -------------------------------------------------------
-function populateBookingFilters() {
-  const db = SahatnaDB.load();
+async function populateBookingFilters() {
+  const db = await SahatnaDB.load();
   const doctors = db.doctors.filter((d) => d.clinicId === currentClinic.id);
   const select = document.getElementById('bookingFilterDoctor');
   select.innerHTML = '<option value="">كل الأطباء</option>';
@@ -155,8 +156,8 @@ function populateBookingFilters() {
   });
 }
 
-function renderBookingsList() {
-  let bookings = SahatnaDB.getBookingsByClinic(currentClinic.id);
+async function renderBookingsList() {
+  let bookings = await SahatnaDB.getBookingsByClinic(currentClinic.id);
   const statusFilter = document.getElementById('bookingFilterStatus').value;
   const doctorFilter = document.getElementById('bookingFilterDoctor').value;
 
@@ -164,6 +165,7 @@ function renderBookingsList() {
   if (doctorFilter) bookings = bookings.filter((b) => b.doctorId === doctorFilter);
 
   const list = document.getElementById('bookingsList');
+  const db = await SahatnaDB.load();
 
   if (bookings.length === 0) {
     list.innerHTML = `
@@ -178,8 +180,8 @@ function renderBookingsList() {
 
   list.innerHTML = bookings
     .map((b) => {
-      const doctor = SahatnaDB.getDoctor(b.doctorId);
-      const specialty = doctor ? SahatnaDB.getSpecialty(doctor.specialtyId) : null;
+      const doctor = db.doctors.find((d) => d.id === b.doctorId);
+      const specialty = doctor ? db.specialties.find((s) => s.id === doctor.specialtyId) : null;
       const dayName = SahatnaDB.getDayName(new Date(b.date + 'T00:00:00').getDay());
       const timeParts = b.time.split(':').map(Number);
 
@@ -206,12 +208,8 @@ function renderBookingsList() {
                 <button onclick="cancelBooking('${b.id}')" class="btn-danger text-xs">✕ إلغاء</button>
               `
                 : ''}
-              ${b.status === 'completed'
-                ? `<span class="text-xs text-success font-semibold">✓ تمت الزيارة</span>`
-                : ''}
-              ${b.status === 'cancelled'
-                ? `<span class="text-xs text-danger font-semibold">✕ ملغي</span>`
-                : ''}
+              ${b.status === 'completed' ? `<span class="text-xs text-success font-semibold">✓ تمت الزيارة</span>` : ''}
+              ${b.status === 'cancelled' ? `<span class="text-xs text-danger font-semibold">✕ ملغي</span>` : ''}
             </div>
           </div>
         </div>
@@ -220,24 +218,24 @@ function renderBookingsList() {
     .join('');
 }
 
-function updateBookingStatus(bookingId, status) {
-  SahatnaDB.updateBookingStatus(bookingId, status);
-  renderBookingsList();
-  renderClinicStats();
+async function updateBookingStatus(bookingId, status) {
+  await SahatnaDB.updateBookingStatus(bookingId, status);
+  await renderBookingsList();
+  await renderClinicStats();
   showToast(`تم تحديث حالة الحجز إلى: ${getStatusLabel(status)}`, 'success');
 }
 
-function cancelBooking(bookingId) {
+async function cancelBooking(bookingId) {
   if (confirm('هل أنت متأكد من إلغاء هذا الحجز؟')) {
-    SahatnaDB.updateBookingStatus(bookingId, 'cancelled');
-    renderBookingsList();
-    renderClinicStats();
+    await SahatnaDB.updateBookingStatus(bookingId, 'cancelled');
+    await renderBookingsList();
+    await renderClinicStats();
     showToast('تم إلغاء الحجز', 'info');
   }
 }
 
 // ---- Calendar ------------------------------------------------------------
-function renderCalendar() {
+async function renderCalendar() {
   const year = calendarDate.getFullYear();
   const month = calendarDate.getMonth();
   const monthNames = ['يناير', 'فبراير', 'مارس', 'أبريل', 'مايو', 'يونيو', 'يوليو', 'أغسطس', 'سبتمبر', 'أكتوبر', 'نوفمبر', 'ديسمبر'];
@@ -248,21 +246,18 @@ function renderCalendar() {
   const daysInPrevMonth = new Date(year, month, 0).getDate();
   const today = new Date().toISOString().slice(0, 10);
 
-  const bookings = SahatnaDB.getBookingsByClinic(currentClinic.id);
+  const bookings = await SahatnaDB.getBookingsByClinic(currentClinic.id);
   const dayNames = ['أحد', 'إثنين', 'ثلاثاء', 'أربعاء', 'خميس', 'جمعة', 'سبت'];
 
   let html = '';
-  // Day headers
   dayNames.forEach((d) => {
     html += `<div class="text-center text-xs font-bold text-gray-500 py-2">${d}</div>`;
   });
 
-  // Previous month days
   for (let i = firstDay - 1; i >= 0; i--) {
     html += `<div class="cal-day other-month text-center text-sm">${daysInPrevMonth - i}</div>`;
   }
 
-  // Current month days
   for (let d = 1; d <= daysInMonth; d++) {
     const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
     const dayBookings = bookings.filter((b) => b.date === dateStr);
@@ -271,14 +266,11 @@ function renderCalendar() {
     html += `
       <div class="cal-day ${isToday ? 'today' : ''} cursor-pointer hover:border-primary transition" onclick="selectCalendarDay('${dateStr}')">
         <div class="text-sm font-semibold ${isToday ? 'text-primary' : 'text-gray-700'}">${d}</div>
-        ${dayBookings.length > 0
-          ? `<div class="mt-1"><span class="badge badge-primary text-xs">${dayBookings.length} حجز</span></div>`
-          : ''}
+        ${dayBookings.length > 0 ? `<div class="mt-1"><span class="badge badge-primary text-xs">${dayBookings.length} حجز</span></div>` : ''}
       </div>
     `;
   }
 
-  // Next month days (fill the grid)
   const totalCells = firstDay + daysInMonth;
   const remaining = (7 - (totalCells % 7)) % 7;
   for (let i = 1; i <= remaining; i++) {
@@ -302,28 +294,24 @@ function selectCalendarDay(dateStr) {
   renderCalendarDayDetail(dateStr);
 }
 
-function renderCalendarDayDetail(dateStr) {
-  const bookings = SahatnaDB.getBookingsByClinic(currentClinic.id).filter((b) => b.date === dateStr);
+async function renderCalendarDayDetail(dateStr) {
+  const bookings = (await SahatnaDB.getBookingsByClinic(currentClinic.id)).filter((b) => b.date === dateStr);
   const dayName = SahatnaDB.getDayName(new Date(dateStr + 'T00:00:00').getDay());
   const container = document.getElementById('calendarDayDetail');
+  const db = await SahatnaDB.load();
 
   if (bookings.length === 0) {
-    container.innerHTML = `
-      <div class="bg-gray-50 rounded-xl p-4 text-center text-gray-400">
-        لا توجد حجوزات في ${dayName} ${dateStr}
-      </div>
-    `;
+    container.innerHTML = `<div class="bg-gray-50 rounded-xl p-4 text-center text-gray-400">لا توجد حجوزات في ${dayName} ${dateStr}</div>`;
     return;
   }
 
   container.innerHTML = `
     <h4 class="font-bold text-gray-800 mb-3">حجوزات ${dayName} ${dateStr} (${bookings.length})</h4>
     <div class="space-y-2">
-      ${bookings
-        .map((b) => {
-          const doctor = SahatnaDB.getDoctor(b.doctorId);
-          const timeParts = b.time.split(':').map(Number);
-          return `
+      ${bookings.map((b) => {
+        const doctor = db.doctors.find((d) => d.id === b.doctorId);
+        const timeParts = b.time.split(':').map(Number);
+        return `
           <div class="booking-item status-${b.status}">
             <div class="flex items-center justify-between">
               <div>
@@ -337,73 +325,56 @@ function renderCalendarDayDetail(dateStr) {
             </div>
           </div>
         `;
-        })
-        .join('')}
+      }).join('')}
     </div>
   `;
 }
 
 // ---- Doctors Tab ---------------------------------------------------------
-function renderClinicDoctors() {
-  const db = SahatnaDB.load();
+async function renderClinicDoctors() {
+  const db = await SahatnaDB.load();
   const doctors = db.doctors.filter((d) => d.clinicId === currentClinic.id);
   const list = document.getElementById('doctorsListClinic');
 
   if (doctors.length === 0) {
-    list.innerHTML = `
-      <div class="col-span-full empty-state">
-        <div class="empty-state-icon">👨‍⚕️</div>
-        <p class="text-gray-400">لا يوجد أطباء مسجلين في عيادتك</p>
-      </div>
-    `;
+    list.innerHTML = `<div class="col-span-full empty-state"><div class="empty-state-icon">👨‍⚕️</div><p class="text-gray-400">لا يوجد أطباء مسجلين في عيادتك</p></div>`;
     return;
   }
 
-  list.innerHTML = doctors
-    .map((d) => {
-      const specialty = SahatnaDB.getSpecialty(d.specialtyId);
-      const docBookings = SahatnaDB.getBookingsByDoctor(d.id);
-      const completed = docBookings.filter((b) => b.status === 'completed').length;
-      const revenue = docBookings
-        .filter((b) => b.status === 'completed')
-        .reduce((sum, b) => sum + b.price, 0);
+  const cards = [];
+  for (const d of doctors) {
+    const specialty = db.specialties.find((s) => s.id === d.specialtyId);
+    const docBookings = await SahatnaDB.getBookingsByDoctor(d.id);
+    const completed = docBookings.filter((b) => b.status === 'completed').length;
+    const revenue = docBookings.filter((b) => b.status === 'completed').reduce((sum, b) => sum + b.price, 0);
 
-      return `
-        <div class="border border-gray-200 rounded-2xl p-4 bg-white">
-          <div class="flex gap-3">
-            <img src="${d.photo}" class="w-16 h-16 rounded-xl object-cover" />
-            <div class="flex-1">
-              <div class="flex items-center gap-2">
-                <h4 class="font-bold text-gray-800">${d.name}</h4>
-                ${d.verified ? '<span class="verified-badge">✓</span>' : ''}
-              </div>
-              <p class="text-sm text-primary">${specialty ? specialty.name : ''}</p>
-              <p class="text-xs text-gray-500 mt-1">خبرة ${d.experienceYears} سنة • ⭐ ${d.rating} (${d.reviewsCount})</p>
+    cards.push(`
+      <div class="border border-gray-200 rounded-2xl p-4 bg-white">
+        <div class="flex gap-3">
+          <img src="${d.photo}" class="w-16 h-16 rounded-xl object-cover" />
+          <div class="flex-1">
+            <div class="flex items-center gap-2">
+              <h4 class="font-bold text-gray-800">${d.name}</h4>
+              ${d.verified ? '<span class="verified-badge">✓</span>' : ''}
             </div>
-          </div>
-          <div class="grid grid-cols-3 gap-2 mt-3 pt-3 border-t border-gray-100 text-center">
-            <div>
-              <p class="text-xs text-gray-400">السعر</p>
-              <p class="font-bold text-sm text-primary">${formatPrice(d.price)}</p>
-            </div>
-            <div>
-              <p class="text-xs text-gray-400">حجوزات</p>
-              <p class="font-bold text-sm">${docBookings.length}</p>
-            </div>
-            <div>
-              <p class="text-xs text-gray-400">الإيرادات</p>
-              <p class="font-bold text-sm text-success">${formatPrice(revenue)}</p>
-            </div>
+            <p class="text-sm text-primary">${specialty ? specialty.name : ''}</p>
+            <p class="text-xs text-gray-500 mt-1">خبرة ${d.experienceYears} سنة • ⭐ ${d.rating} (${d.reviewsCount})</p>
           </div>
         </div>
-      `;
-    })
-    .join('');
+        <div class="grid grid-cols-3 gap-2 mt-3 pt-3 border-t border-gray-100 text-center">
+          <div><p class="text-xs text-gray-400">السعر</p><p class="font-bold text-sm text-primary">${formatPrice(d.price)}</p></div>
+          <div><p class="text-xs text-gray-400">حجوزات</p><p class="font-bold text-sm">${docBookings.length}</p></div>
+          <div><p class="text-xs text-gray-400">الإيرادات</p><p class="font-bold text-sm text-success">${formatPrice(revenue)}</p></div>
+        </div>
+      </div>
+    `);
+  }
+  list.innerHTML = cards.join('');
 }
 
 // ---- Schedule Management -------------------------------------------------
-function populateScheduleDoctorSelect() {
-  const db = SahatnaDB.load();
+async function populateScheduleDoctorSelect() {
+  const db = await SahatnaDB.load();
   const doctors = db.doctors.filter((d) => d.clinicId === currentClinic.id);
   const select = document.getElementById('scheduleDoctorSelect');
   select.innerHTML = '<option value="">اختر طبيب...</option>';
@@ -415,7 +386,7 @@ function populateScheduleDoctorSelect() {
   });
 }
 
-function loadDoctorSchedule() {
+async function loadDoctorSchedule() {
   const doctorId = document.getElementById('scheduleDoctorSelect').value;
   const editor = document.getElementById('scheduleEditor');
 
@@ -424,7 +395,7 @@ function loadDoctorSchedule() {
     return;
   }
 
-  const schedule = SahatnaDB.getSchedule(doctorId);
+  const schedule = await SahatnaDB.getSchedule(doctorId);
   const dayNames = ['الأحد', 'الإثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'];
   const slotDuration = schedule ? schedule.slotDuration : 30;
 
@@ -440,7 +411,6 @@ function loadDoctorSchedule() {
           <option value="60" ${slotDuration === 60 ? 'selected' : ''}>60 دقيقة</option>
         </select>
       </div>
-
       <div class="space-y-2">
   `;
 
@@ -465,12 +435,7 @@ function loadDoctorSchedule() {
     `;
   }
 
-  html += `
-      </div>
-      <button onclick="saveSchedule('${doctorId}')" class="btn-primary w-full mt-4">حفظ الدوام</button>
-    </div>
-  `;
-
+  html += `</div><button onclick="saveSchedule('${doctorId}')" class="btn-primary w-full mt-4">حفظ الدوام</button></div>`;
   editor.innerHTML = html;
 }
 
@@ -491,7 +456,7 @@ function toggleDayRow(day) {
   }
 }
 
-function saveSchedule(doctorId) {
+async function saveSchedule(doctorId) {
   const slotDuration = parseInt(document.getElementById('slotDuration').value);
   const slots = [];
 
@@ -506,13 +471,13 @@ function saveSchedule(doctorId) {
     }
   }
 
-  SahatnaDB.updateSchedule(doctorId, slots, slotDuration);
+  await SahatnaDB.updateSchedule(doctorId, slots, slotDuration);
   showToast('تم حفظ دوام الطبيب بنجاح', 'success');
 }
 
 // ---- Reminders -----------------------------------------------------------
-function renderReminders() {
-  const db = SahatnaDB.load();
+async function renderReminders() {
+  const db = await SahatnaDB.load();
   const doctorIds = db.doctors.filter((d) => d.clinicId === currentClinic.id).map((d) => d.id);
   const reminders = db.reminders.filter((r) => {
     const booking = db.bookings.find((b) => b.id === r.bookingId);
@@ -522,12 +487,7 @@ function renderReminders() {
   const list = document.getElementById('remindersList');
 
   if (reminders.length === 0) {
-    list.innerHTML = `
-      <div class="empty-state">
-        <div class="empty-state-icon">📱</div>
-        <p class="text-gray-400">لا توجد تذكيرات حالياً</p>
-      </div>
-    `;
+    list.innerHTML = `<div class="empty-state"><div class="empty-state-icon">📱</div><p class="text-gray-400">لا توجد تذكيرات حالياً</p></div>`;
     return;
   }
 
@@ -553,14 +513,14 @@ function renderReminders() {
     .join('');
 }
 
-function sendReminder(reminderId) {
-  SahatnaDB.markReminderSent(reminderId);
-  renderReminders();
+async function sendReminder(reminderId) {
+  await SahatnaDB.markReminderSent(reminderId);
+  await renderReminders();
   showToast('تم إرسال التذكير بنجاح', 'success');
 }
 
-function sendAllReminders() {
-  const db = SahatnaDB.load();
+async function sendAllReminders() {
+  const db = await SahatnaDB.load();
   const doctorIds = db.doctors.filter((d) => d.clinicId === currentClinic.id).map((d) => d.id);
   const pending = db.reminders.filter((r) => {
     if (r.sent) return false;
@@ -573,12 +533,12 @@ function sendAllReminders() {
     return;
   }
 
-  pending.forEach((r) => SahatnaDB.markReminderSent(r.id));
-  renderReminders();
+  for (const r of pending) {
+    await SahatnaDB.markReminderSent(r.id);
+  }
+  await renderReminders();
   showToast(`تم إرسال ${pending.length} تذكير بنجاح`, 'success');
 }
 
 // ---- Initialize ----------------------------------------------------------
-document.addEventListener('DOMContentLoaded', () => {
-  checkClinicSession();
-});
+document.addEventListener('DOMContentLoaded', checkClinicSession);

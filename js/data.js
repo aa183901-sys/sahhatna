@@ -1,13 +1,30 @@
 /**
- * صحتنا - Sahatna Data Layer
- * Mock database using localStorage with seed data for the Iraqi market.
- * All prices in Iraqi Dinar (IQD), cities/specialties localized for Iraq.
+ * صحتنا - Sahatna Data Layer (Unified: Supabase + localStorage)
+ *
+ * All methods are async (return Promises). When Supabase is configured
+ * (SUPABASE_CONFIG.enabled = true), data is fetched from PostgreSQL.
+ * Otherwise, it falls back to localStorage with seed data.
+ *
+ * The public API is identical in both modes, so app.js / clinic.js / admin.js
+ * work without any mode-specific logic.
+ *
+ * SECURITY NOTE: clinicLogin / adminLogin currently query the database table
+ * directly. In production, replace with Supabase Auth (email + password) and
+ * store only the clinic_id mapping in clinic_users.
  */
 
 const SahatnaDB = (function () {
+  // ---- Constants ----------------------------------------------------------
   const STORAGE_KEY = 'sahatna_db_v1';
+  const CACHE_TTL = 5000; // 5 seconds — avoids redundant Supabase queries
 
-  // ---- Seed Data ----------------------------------------------------------
+  // ---- State --------------------------------------------------------------
+  let _sb = null; // Supabase client
+  let _initPromise = null;
+  let cache = null;
+  let cacheTime = 0;
+
+  // ---- Seed Data (localStorage fallback only) -----------------------------
   const seed = {
     specialties: [
       { id: 'sp1', name: 'طب الأسرة', nameEn: 'Family Medicine', icon: '👨‍👩‍👧' },
@@ -24,249 +41,34 @@ const SahatnaDB = (function () {
       { id: 'sp12', name: 'النفسية', nameEn: 'Psychiatry', icon: '💭' },
     ],
     cities: [
-      { id: 'c1', name: 'بغداد' },
-      { id: 'c2', name: 'البصرة' },
-      { id: 'c3', name: 'الموصل' },
-      { id: 'c4', name: 'أربيل' },
-      { id: 'c5', name: 'النجف' },
-      { id: 'c6', name: 'كربلاء' },
-      { id: 'c7', name: 'كركوك' },
-      { id: 'c8', name: 'السليمانية' },
-      { id: 'c9', name: 'الديوانية' },
-      { id: 'c10', name: 'العمارة' },
-      { id: 'c11', name: 'الناصرية' },
-      { id: 'c12', name: 'الحلة' },
+      { id: 'c1', name: 'بغداد' }, { id: 'c2', name: 'البصرة' },
+      { id: 'c3', name: 'الموصل' }, { id: 'c4', name: 'أربيل' },
+      { id: 'c5', name: 'النجف' }, { id: 'c6', name: 'كربلاء' },
+      { id: 'c7', name: 'كركوك' }, { id: 'c8', name: 'السليمانية' },
+      { id: 'c9', name: 'الديوانية' }, { id: 'c10', name: 'العمارة' },
+      { id: 'c11', name: 'الناصرية' }, { id: 'c12', name: 'الحلة' },
     ],
     clinics: [
-      {
-        id: 'cl1',
-        name: 'مركز الشفاء الطبي',
-        cityId: 'c1',
-        area: 'الكرادة',
-        address: 'شارع الكرادة داخل، قرب مجمع الكرادة',
-        phone: '07701234567',
-        lat: 33.3152,
-        lng: 44.4360,
-        status: 'approved',
-        createdAt: '2025-01-15T08:00:00Z',
-      },
-      {
-        id: 'cl2',
-        name: 'عيادة النور للتخصصات',
-        cityId: 'c1',
-        area: 'المنصور',
-        address: 'شارع الأميرات، المنصور',
-        phone: '07801234567',
-        lat: 33.3230,
-        lng: 44.3850,
-        status: 'approved',
-        createdAt: '2025-02-01T08:00:00Z',
-      },
-      {
-        id: 'cl3',
-        name: 'مستشفى الحياة الخاص',
-        cityId: 'c2',
-        area: 'العشار',
-        address: 'شارع الكورنيش، العشار',
-        phone: '07901234567',
-        lat: 30.5085,
-        lng: 47.7804,
-        status: 'approved',
-        createdAt: '2025-02-10T08:00:00Z',
-      },
-      {
-        id: 'cl4',
-        name: 'مركز الرافدين الطبي',
-        cityId: 'c5',
-        area: 'المركز',
-        address: 'شارع الكوفة، النجف',
-        phone: '07712345678',
-        lat: 32.0000,
-        lng: 44.3333,
-        status: 'pending',
-        createdAt: '2025-07-01T08:00:00Z',
-      },
+      { id: 'cl1', name: 'مركز الشفاء الطبي', cityId: 'c1', area: 'الكرادة', address: 'شارع الكرادة داخل، قرب مجمع الكرادة', phone: '07701234567', lat: 33.3152, lng: 44.4360, status: 'approved', createdAt: '2025-01-15T08:00:00Z' },
+      { id: 'cl2', name: 'عيادة النور للتخصصات', cityId: 'c1', area: 'المنصور', address: 'شارع الأميرات، المنصور', phone: '07801234567', lat: 33.3230, lng: 44.3850, status: 'approved', createdAt: '2025-02-01T08:00:00Z' },
+      { id: 'cl3', name: 'مستشفى الحياة الخاص', cityId: 'c2', area: 'العشار', address: 'شارع الكورنيش، العشار', phone: '07901234567', lat: 30.5085, lng: 47.7804, status: 'approved', createdAt: '2025-02-10T08:00:00Z' },
+      { id: 'cl4', name: 'مركز الرافدين الطبي', cityId: 'c5', area: 'المركز', address: 'شارع الكوفة، النجف', phone: '07712345678', lat: 32.0000, lng: 44.3333, status: 'pending', createdAt: '2025-07-01T08:00:00Z' },
     ],
     doctors: [
-      {
-        id: 'd1',
-        name: 'د. أحمد الكاظمي',
-        nameEn: 'Dr. Ahmed Al-Kadhimi',
-        specialtyId: 'sp2',
-        clinicId: 'cl1',
-        photo: 'https://ui-avatars.com/api/?name=Ahmed+K&background=0d9488&color=fff&size=200',
-        bio: 'استشاري باطنية مع خبرة 15 سنة في تشخيص وعلاج الأمراض المزمنة مثل السكري وضغط الدم.',
-        qualifications: 'بورد عراقي في الباطنية - جامعة بغداد',
-        experienceYears: 15,
-        price: 30000,
-        gender: 'male',
-        languages: ['العربية', 'English'],
-        rating: 4.8,
-        reviewsCount: 124,
-        services: ['clinic', 'video'],
-        verified: true,
-        featured: true,
-      },
-      {
-        id: 'd2',
-        name: 'د. سارة العبيدي',
-        nameEn: 'Dr. Sara Al-Obaidi',
-        specialtyId: 'sp4',
-        clinicId: 'cl1',
-        photo: 'https://ui-avatars.com/api/?name=Sara+O&background=db2777&color=fff&size=200',
-        bio: 'أخصائية نسائية وتوليد، متخصصة في متابعة الحمل والعناية بصحة المرأة.',
-        qualifications: 'بورد عراقي في النسائية - جامعة بغداد',
-        experienceYears: 10,
-        price: 35000,
-        gender: 'female',
-        languages: ['العربية'],
-        rating: 4.9,
-        reviewsCount: 89,
-        services: ['clinic', 'video', 'home'],
-        verified: true,
-        featured: true,
-      },
-      {
-        id: 'd3',
-        name: 'د. محمد الجبوري',
-        nameEn: 'Dr. Mohammed Al-Jubouri',
-        specialtyId: 'sp3',
-        clinicId: 'cl2',
-        photo: 'https://ui-avatars.com/api/?name=Mohammed+J&background=2563eb&color=fff&size=200',
-        bio: 'طبيب أطفال متخصص في رعاية حديثي الولادة والأمراض المعدية لدى الأطفال.',
-        qualifications: 'بورد عراقي في الأطفال - جامعة الموصل',
-        experienceYears: 12,
-        price: 25000,
-        gender: 'male',
-        languages: ['العربية', 'English', 'كوردی'],
-        rating: 4.7,
-        reviewsCount: 156,
-        services: ['clinic', 'video'],
-        verified: true,
-        featured: false,
-      },
-      {
-        id: 'd4',
-        name: 'د. زينب الحسني',
-        nameEn: 'Dr. Zainab Al-Hasnawi',
-        specialtyId: 'sp5',
-        clinicId: 'cl2',
-        photo: 'https://ui-avatars.com/api/?name=Zainab+H&background=7c3aed&color=fff&size=200',
-        bio: 'أخصائية جلدية، علاج حب الشباب، التصبغات، وإجراءات التجميل غير الجراحي.',
-        qualifications: 'بورد عراقي في الجلدية - جامعة البصرة',
-        experienceYears: 8,
-        price: 40000,
-        gender: 'female',
-        languages: ['العربية'],
-        rating: 4.6,
-        reviewsCount: 67,
-        services: ['clinic'],
-        verified: true,
-        featured: false,
-      },
-      {
-        id: 'd5',
-        name: 'د. عمر التميمي',
-        nameEn: 'Dr. Omar Al-Tamimi',
-        specialtyId: 'sp6',
-        clinicId: 'cl3',
-        photo: 'https://ui-avatars.com/api/?name=Omar+T&background=0891b2&color=fff&size=200',
-        bio: 'طبيب أسنان تقويم وزراعة، خبرة في علاج التشوهات وتركيب الأسنان.',
-        qualifications: 'ماجستير في تقويم الأسنان - جامعة بغداد',
-        experienceYears: 14,
-        price: 20000,
-        gender: 'male',
-        languages: ['العربية', 'English'],
-        rating: 4.5,
-        reviewsCount: 203,
-        services: ['clinic'],
-        verified: true,
-        featured: true,
-      },
-      {
-        id: 'd6',
-        name: 'د. نور الساعدي',
-        nameEn: 'Dr. Noor Al-Saadi',
-        specialtyId: 'sp1',
-        clinicId: 'cl3',
-        photo: 'https://ui-avatars.com/api/?name=Noor+S&background=059669&color=fff&size=200',
-        bio: 'طبيبة طب أسرة، متابعة الأمراض المزمنة والوقائية لكل أفراد العائلة.',
-        qualifications: 'بورد عراقي في طب الأسرة',
-        experienceYears: 7,
-        price: 20000,
-        gender: 'female',
-        languages: ['العربية', 'English'],
-        rating: 4.9,
-        reviewsCount: 45,
-        services: ['clinic', 'video', 'home'],
-        verified: true,
-        featured: false,
-      },
+      { id: 'd1', name: 'د. أحمد الكاظمي', nameEn: 'Dr. Ahmed Al-Kadhimi', specialtyId: 'sp2', clinicId: 'cl1', photo: 'https://ui-avatars.com/api/?name=Ahmed+K&background=0d9488&color=fff&size=200', bio: 'استشاري باطنية مع خبرة 15 سنة في تشخيص وعلاج الأمراض المزمنة مثل السكري وضغط الدم.', qualifications: 'بورد عراقي في الباطنية - جامعة بغداد', experienceYears: 15, price: 30000, gender: 'male', languages: ['العربية', 'English'], rating: 4.8, reviewsCount: 124, services: ['clinic', 'video'], verified: true, featured: true },
+      { id: 'd2', name: 'د. سارة العبيدي', nameEn: 'Dr. Sara Al-Obaidi', specialtyId: 'sp4', clinicId: 'cl1', photo: 'https://ui-avatars.com/api/?name=Sara+O&background=db2777&color=fff&size=200', bio: 'أخصائية نسائية وتوليد، متخصصة في متابعة الحمل والعناية بصحة المرأة.', qualifications: 'بورد عراقي في النسائية - جامعة بغداد', experienceYears: 10, price: 35000, gender: 'female', languages: ['العربية'], rating: 4.9, reviewsCount: 89, services: ['clinic', 'video', 'home'], verified: true, featured: true },
+      { id: 'd3', name: 'د. محمد الجبوري', nameEn: 'Dr. Mohammed Al-Jubouri', specialtyId: 'sp3', clinicId: 'cl2', photo: 'https://ui-avatars.com/api/?name=Mohammed+J&background=2563eb&color=fff&size=200', bio: 'طبيب أطفال متخصص في رعاية حديثي الولادة والأمراض المعدية لدى الأطفال.', qualifications: 'بورد عراقي في الأطفال - جامعة الموصل', experienceYears: 12, price: 25000, gender: 'male', languages: ['العربية', 'English', 'كوردی'], rating: 4.7, reviewsCount: 156, services: ['clinic', 'video'], verified: true, featured: false },
+      { id: 'd4', name: 'د. زينب الحسني', nameEn: 'Dr. Zainab Al-Hasnawi', specialtyId: 'sp5', clinicId: 'cl2', photo: 'https://ui-avatars.com/api/?name=Zainab+H&background=7c3aed&color=fff&size=200', bio: 'أخصائية جلدية، علاج حب الشباب، التصبغات، وإجراءات التجميل غير الجراحي.', qualifications: 'بورد عراقي في الجلدية - جامعة البصرة', experienceYears: 8, price: 40000, gender: 'female', languages: ['العربية'], rating: 4.6, reviewsCount: 67, services: ['clinic'], verified: true, featured: false },
+      { id: 'd5', name: 'د. عمر التميمي', nameEn: 'Dr. Omar Al-Tamimi', specialtyId: 'sp6', clinicId: 'cl3', photo: 'https://ui-avatars.com/api/?name=Omar+T&background=0891b2&color=fff&size=200', bio: 'طبيب أسنان تقويم وزراعة، خبرة في علاج التشوهات وتركيب الأسنان.', qualifications: 'ماجستير في تقويم الأسنان - جامعة بغداد', experienceYears: 14, price: 20000, gender: 'male', languages: ['العربية', 'English'], rating: 4.5, reviewsCount: 203, services: ['clinic'], verified: true, featured: true },
+      { id: 'd6', name: 'د. نور الساعدي', nameEn: 'Dr. Noor Al-Saadi', specialtyId: 'sp1', clinicId: 'cl3', photo: 'https://ui-avatars.com/api/?name=Noor+S&background=059669&color=fff&size=200', bio: 'طبيبة طب أسرة، متابعة الأمراض المزمنة والوقائية لكل أفراد العائلة.', qualifications: 'بورد عراقي في طب الأسرة', experienceYears: 7, price: 20000, gender: 'female', languages: ['العربية', 'English'], rating: 4.9, reviewsCount: 45, services: ['clinic', 'video', 'home'], verified: true, featured: false },
     ],
-    // Schedule: each doctor has weekly slots. 0=Sunday ... 6=Saturday
     schedules: [
-      {
-        doctorId: 'd1',
-        slots: [
-          { day: 0, start: '17:00', end: '21:00' },
-          { day: 1, start: '17:00', end: '21:00' },
-          { day: 2, start: '17:00', end: '21:00' },
-          { day: 3, start: '17:00', end: '21:00' },
-          { day: 5, start: '10:00', end: '14:00' },
-        ],
-        slotDuration: 30, // minutes
-      },
-      {
-        doctorId: 'd2',
-        slots: [
-          { day: 0, start: '16:00', end: '20:00' },
-          { day: 2, start: '16:00', end: '20:00' },
-          { day: 4, start: '16:00', end: '20:00' },
-          { day: 6, start: '11:00', end: '15:00' },
-        ],
-        slotDuration: 30,
-      },
-      {
-        doctorId: 'd3',
-        slots: [
-          { day: 1, start: '10:00', end: '14:00' },
-          { day: 3, start: '10:00', end: '14:00' },
-          { day: 5, start: '10:00', end: '14:00' },
-          { day: 6, start: '10:00', end: '14:00' },
-        ],
-        slotDuration: 20,
-      },
-      {
-        doctorId: 'd4',
-        slots: [
-          { day: 0, start: '11:00', end: '15:00' },
-          { day: 2, start: '11:00', end: '15:00' },
-          { day: 4, start: '11:00', end: '15:00' },
-        ],
-        slotDuration: 30,
-      },
-      {
-        doctorId: 'd5',
-        slots: [
-          { day: 1, start: '09:00', end: '13:00' },
-          { day: 2, start: '09:00', end: '13:00' },
-          { day: 3, start: '09:00', end: '13:00' },
-          { day: 4, start: '09:00', end: '13:00' },
-          { day: 5, start: '09:00', end: '13:00' },
-        ],
-        slotDuration: 30,
-      },
-      {
-        doctorId: 'd6',
-        slots: [
-          { day: 0, start: '12:00', end: '16:00' },
-          { day: 1, start: '12:00', end: '16:00' },
-          { day: 2, start: '12:00', end: '16:00' },
-          { day: 3, start: '12:00', end: '16:00' },
-          { day: 4, start: '12:00', end: '16:00' },
-        ],
-        slotDuration: 20,
-      },
+      { doctorId: 'd1', slots: [{ day: 0, start: '17:00', end: '21:00' }, { day: 1, start: '17:00', end: '21:00' }, { day: 2, start: '17:00', end: '21:00' }, { day: 3, start: '17:00', end: '21:00' }, { day: 5, start: '10:00', end: '14:00' }], slotDuration: 30 },
+      { doctorId: 'd2', slots: [{ day: 0, start: '16:00', end: '20:00' }, { day: 2, start: '16:00', end: '20:00' }, { day: 4, start: '16:00', end: '20:00' }, { day: 6, start: '11:00', end: '15:00' }], slotDuration: 30 },
+      { doctorId: 'd3', slots: [{ day: 1, start: '10:00', end: '14:00' }, { day: 3, start: '10:00', end: '14:00' }, { day: 5, start: '10:00', end: '14:00' }, { day: 6, start: '10:00', end: '14:00' }], slotDuration: 20 },
+      { doctorId: 'd4', slots: [{ day: 0, start: '11:00', end: '15:00' }, { day: 2, start: '11:00', end: '15:00' }, { day: 4, start: '11:00', end: '15:00' }], slotDuration: 30 },
+      { doctorId: 'd5', slots: [{ day: 1, start: '09:00', end: '13:00' }, { day: 2, start: '09:00', end: '13:00' }, { day: 3, start: '09:00', end: '13:00' }, { day: 4, start: '09:00', end: '13:00' }, { day: 5, start: '09:00', end: '13:00' }], slotDuration: 30 },
+      { doctorId: 'd6', slots: [{ day: 0, start: '12:00', end: '16:00' }, { day: 1, start: '12:00', end: '16:00' }, { day: 2, start: '12:00', end: '16:00' }, { day: 3, start: '12:00', end: '16:00' }, { day: 4, start: '12:00', end: '16:00' }], slotDuration: 20 },
     ],
     reviews: [
       { id: 'r1', doctorId: 'd1', patientName: 'علي حسين', rating: 5, comment: 'طبيب محترم وخبير، شخّص حالتي بدقة.', date: '2025-06-20', verified: true },
@@ -276,68 +78,218 @@ const SahatnaDB = (function () {
       { id: 'r5', doctorId: 'd5', patientName: 'حسن كاظم', rating: 4, comment: 'علاج الأسنان كان جيد والأسعار معقولة.', date: '2025-06-15', verified: true },
     ],
     bookings: [],
-    // Clinic login: phone = password (demo). In production this would be hashed.
     clinicUsers: [
       { id: 'cu1', clinicId: 'cl1', username: 'cl1', password: '1234', name: 'مدير مركز الشفاء' },
       { id: 'cu2', clinicId: 'cl2', username: 'cl2', password: '1234', name: 'مدير عيادة النور' },
       { id: 'cu3', clinicId: 'cl3', username: 'cl3', password: '1234', name: 'مدير مستشفى الحياة' },
     ],
-    adminUsers: [
-      { username: 'admin', password: 'admin123', name: 'مدير صحتنا' },
-    ],
+    adminUsers: [{ username: 'admin', password: 'admin123', name: 'مدير صحتنا' }],
     reminders: [],
     nextBookingId: 1,
     nextReminderId: 1,
   };
 
-  // ---- Persistence -------------------------------------------------------
-  function load() {
+  // ---- Init ---------------------------------------------------------------
+  async function ensureInit() {
+    if (_initPromise) return _initPromise;
+    _initPromise = (async () => {
+      if (typeof SUPABASE_CONFIG !== 'undefined' && SUPABASE_CONFIG.enabled) {
+        _sb = await initSupabase();
+        if (_sb) {
+          console.log('✅ SahatnaDB: Using Supabase (PostgreSQL)');
+        } else {
+          console.warn('⚠️ SahatnaDB: Supabase init failed, using localStorage');
+        }
+      } else {
+        console.log('🔄 SahatnaDB: Using localStorage (demo mode)');
+      }
+    })();
+    return _initPromise;
+  }
+
+  function isSupabase() {
+    return _sb !== null;
+  }
+
+  function invalidateCache() {
+    cache = null;
+  }
+
+  // ---- Mapping: Supabase snake_case → App camelCase -----------------------
+  function mapSpecialty(s) {
+    return { id: s.id, name: s.name, nameEn: s.name_en, icon: s.icon };
+  }
+  function mapCity(c) {
+    return { id: c.id, name: c.name };
+  }
+  function mapClinic(c) {
+    return {
+      id: c.id, name: c.name, cityId: c.city_id, area: c.area,
+      address: c.address, phone: c.phone, lat: parseFloat(c.lat) || 0,
+      lng: parseFloat(c.lng) || 0, status: c.status, createdAt: c.created_at,
+    };
+  }
+  function mapDoctor(d) {
+    return {
+      id: d.id, name: d.name, nameEn: d.name_en, specialtyId: d.specialty_id,
+      clinicId: d.clinic_id, photo: d.photo, bio: d.bio,
+      qualifications: d.qualifications, experienceYears: d.experience_years,
+      price: d.price, gender: d.gender, languages: d.languages || ['العربية'],
+      rating: parseFloat(d.rating) || 0, reviewsCount: d.reviews_count || 0,
+      services: d.services || ['clinic'], verified: d.verified, featured: d.featured,
+    };
+  }
+  function mapBooking(b) {
+    return {
+      id: b.id, doctorId: b.doctor_id, clinicId: b.clinic_id,
+      patientName: b.patient_name, patientPhone: b.patient_phone,
+      patientAge: b.patient_age, patientNotes: b.patient_notes,
+      date: b.date, time: b.time, service: b.service, price: b.price,
+      status: b.status, paymentMethod: b.payment_method, createdAt: b.created_at,
+    };
+  }
+  function mapReview(r) {
+    return {
+      id: r.id, doctorId: r.doctor_id, patientName: r.patient_name,
+      patientPhone: r.patient_phone, rating: r.rating, comment: r.comment,
+      date: r.created_at ? r.created_at.slice(0, 10) : '',
+      verified: r.verified, appointmentId: r.appointment_id,
+    };
+  }
+  function mapReminder(r) {
+    return {
+      id: r.id, bookingId: r.appointment_id, patientName: r.patient_name,
+      patientPhone: r.patient_phone, doctorName: r.doctor_name,
+      clinicName: r.clinic_name, date: r.date, time: r.time,
+      sent: r.sent, sentAt: r.sent_at, createdAt: r.created_at,
+    };
+  }
+  // Group Supabase schedule rows (one row per day) into the app's schedule object
+  function groupSchedules(rows) {
+    const grouped = {};
+    rows.forEach((r) => {
+      if (!grouped[r.doctor_id]) {
+        grouped[r.doctor_id] = { doctorId: r.doctor_id, slots: [], slotDuration: r.slot_duration || 30 };
+      }
+      grouped[r.doctor_id].slots.push({ day: r.day, start: r.start_time, end: r.end_time });
+    });
+    return Object.values(grouped);
+  }
+
+  // ---- localStorage (sync internal) --------------------------------------
+  function loadLocal() {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) {
-      save(seed);
+      saveLocal(seed);
       return JSON.parse(JSON.stringify(seed));
     }
     try {
       return JSON.parse(raw);
     } catch (e) {
       console.error('DB parse error, reseeding', e);
-      save(seed);
+      saveLocal(seed);
       return JSON.parse(JSON.stringify(seed));
     }
   }
-
-  function save(db) {
+  function saveLocal(db) {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(db));
   }
-
-  function reset() {
+  function resetLocal() {
     localStorage.removeItem(STORAGE_KEY);
-    return load();
+    return loadLocal();
   }
 
-  // ---- Helpers -----------------------------------------------------------
-  function getSpecialty(id) {
-    return load().specialties.find((s) => s.id === id);
-  }
-  function getCity(id) {
-    return load().cities.find((c) => c.id === id);
-  }
-  function getClinic(id) {
-    return load().clinics.find((c) => c.id === id);
-  }
-  function getDoctor(id) {
-    return load().doctors.find((d) => d.id === id);
-  }
-  function getSchedule(doctorId) {
-    return load().schedules.find((s) => s.doctorId === doctorId);
+  // ---- Supabase load (async) ---------------------------------------------
+  async function loadFromSupabase() {
+    if (cache && Date.now() - cacheTime < CACHE_TTL) return cache;
+    try {
+      const [specs, cits, clins, docs, scheds, revs, apts, rems] = await Promise.all([
+        _sb.from('specialties').select('*'),
+        _sb.from('cities').select('*'),
+        _sb.from('clinics').select('*'),
+        _sb.from('doctors').select('*'),
+        _sb.from('schedules').select('*'),
+        _sb.from('reviews').select('*'),
+        _sb.from('appointments').select('*'),
+        _sb.from('reminders').select('*'),
+      ]);
+      cache = {
+        specialties: (specs.data || []).map(mapSpecialty),
+        cities: (cits.data || []).map(mapCity),
+        clinics: (clins.data || []).map(mapClinic),
+        doctors: (docs.data || []).map(mapDoctor),
+        schedules: groupSchedules(scheds.data || []),
+        reviews: (revs.data || []).map(mapReview),
+        bookings: (apts.data || []).map(mapBooking),
+        reminders: (rems.data || []).map(mapReminder),
+        clinicUsers: [], // Not fetched — auth is handled separately
+        adminUsers: [],
+      };
+      cacheTime = Date.now();
+      return cache;
+    } catch (e) {
+      console.error('Supabase load error:', e);
+      if (!cache) {
+        cache = { specialties: [], cities: [], clinics: [], doctors: [], schedules: [], reviews: [], bookings: [], reminders: [], clinicUsers: [], adminUsers: [] };
+        cacheTime = Date.now();
+      }
+      return cache;
+    }
   }
 
-  // Generate available time slots for a given date (YYYY-MM-DD)
-  function getAvailableSlots(doctorId, dateStr) {
-    const schedule = getSchedule(doctorId);
+  // ---- Unified load (async) -----------------------------------------------
+  async function load() {
+    await ensureInit();
+    if (isSupabase()) {
+      return await loadFromSupabase();
+    }
+    return loadLocal();
+  }
+
+  // ---- Accessors (async — use cached load) --------------------------------
+  async function getSpecialty(id) {
+    const db = await load();
+    return db.specialties.find((s) => s.id === id);
+  }
+  async function getCity(id) {
+    const db = await load();
+    return db.cities.find((c) => c.id === id);
+  }
+  async function getClinic(id) {
+    const db = await load();
+    return db.clinics.find((c) => c.id === id);
+  }
+  async function getDoctor(id) {
+    const db = await load();
+    return db.doctors.find((d) => d.id === id);
+  }
+  async function getSchedule(doctorId) {
+    const db = await load();
+    return db.schedules.find((s) => s.doctorId === doctorId);
+  }
+
+  // ---- Utility (sync — pure functions) ------------------------------------
+  function formatTime(h, m) {
+    const period = h >= 12 ? 'م' : 'ص';
+    let h12 = h % 12;
+    if (h12 === 0) h12 = 12;
+    return `${h12}:${String(m).padStart(2, '0')} ${period}`;
+  }
+  function getDayName(day) {
+    return ['الأحد', 'الإثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'][day];
+  }
+  function getMonthName(month) {
+    return ['يناير', 'فبراير', 'مارس', 'أبريل', 'مايو', 'يونيو', 'يوليو', 'أغسطس', 'سبتمبر', 'أكتوبر', 'نوفمبر', 'ديسمبر'][month];
+  }
+
+  // ---- Slot Generation (async) --------------------------------------------
+  async function getAvailableSlots(doctorId, dateStr) {
+    const db = await load();
+    const schedule = db.schedules.find((s) => s.doctorId === doctorId);
     if (!schedule) return [];
+
     const date = new Date(dateStr + 'T00:00:00');
-    const day = date.getDay(); // 0=Sunday
+    const day = date.getDay();
     const daySlot = schedule.slots.find((s) => s.day === day);
     if (!daySlot) return [];
 
@@ -348,7 +300,6 @@ const SahatnaDB = (function () {
     const endMin = eh * 60 + em;
     const duration = schedule.slotDuration || 30;
 
-    // Don't show past slots if the date is today
     const now = new Date();
     const isToday = dateStr === now.toISOString().slice(0, 10);
     const nowMin = now.getHours() * 60 + now.getMinutes();
@@ -357,14 +308,9 @@ const SahatnaDB = (function () {
       if (isToday && t <= nowMin) continue;
       const h = Math.floor(t / 60);
       const m = t % 60;
-      slots.push({
-        time: `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`,
-        label: formatTime(h, m),
-      });
+      slots.push({ time: `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`, label: formatTime(h, m) });
     }
 
-    // Filter out already-booked slots
-    const db = load();
     const booked = db.bookings.filter(
       (b) => b.doctorId === doctorId && b.date === dateStr && b.status !== 'cancelled'
     );
@@ -372,202 +318,257 @@ const SahatnaDB = (function () {
     return slots.filter((s) => !bookedTimes.includes(s.time));
   }
 
-  function formatTime(h, m) {
-    const period = h >= 12 ? 'م' : 'ص';
-    let h12 = h % 12;
-    if (h12 === 0) h12 = 12;
-    return `${h12}:${String(m).padStart(2, '0')} ${period}`;
-  }
-
-  // Get next 14 days with available slots for a doctor
-  function getAvailableDays(doctorId, daysAhead = 14) {
+  async function getAvailableDays(doctorId, daysAhead = 14) {
     const result = [];
     const today = new Date();
     for (let i = 0; i < daysAhead; i++) {
       const d = new Date(today);
       d.setDate(d.getDate() + i);
       const dateStr = d.toISOString().slice(0, 10);
-      const slots = getAvailableSlots(doctorId, dateStr);
+      const slots = await getAvailableSlots(doctorId, dateStr);
       result.push({
-        date: dateStr,
-        dayName: getDayName(d.getDay()),
-        dayNumber: d.getDate(),
-        monthName: getMonthName(d.getMonth()),
-        slotsCount: slots.length,
-        slots: slots,
+        date: dateStr, dayName: getDayName(d.getDay()), dayNumber: d.getDate(),
+        monthName: getMonthName(d.getMonth()), slotsCount: slots.length, slots,
       });
     }
     return result;
   }
 
-  function getDayName(day) {
-    const names = ['الأحد', 'الإثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'];
-    return names[day];
-  }
+  // ---- Booking Operations (async) -----------------------------------------
+  async function createBooking(data) {
+    if (isSupabase()) {
+      const { data: apt, error } = await _sb.from('appointments').insert({
+        doctor_id: data.doctorId, clinic_id: data.clinicId,
+        patient_name: data.patientName, patient_phone: data.patientPhone,
+        patient_age: data.patientAge, patient_notes: data.patientNotes,
+        date: data.date, time: data.time, service: data.service,
+        price: data.price, status: 'confirmed',
+        payment_method: data.paymentMethod || 'clinic',
+      }).select().single();
+      if (error) throw error;
 
-  function getMonthName(month) {
-    const names = ['يناير', 'فبراير', 'مارس', 'أبريل', 'مايو', 'يونيو', 'يوليو', 'أغسطس', 'سبتمبر', 'أكتوبر', 'نوفمبر', 'ديسمبر'];
-    return names[month];
-  }
-
-  // ---- Booking operations ------------------------------------------------
-  function createBooking(data) {
-    const db = load();
+      // Create reminder
+      const doctor = await getDoctor(data.doctorId);
+      const clinic = await getClinic(data.clinicId);
+      if (doctor && clinic) {
+        await _sb.from('reminders').insert({
+          appointment_id: apt.id, patient_name: data.patientName,
+          patient_phone: data.patientPhone, doctor_name: doctor.name,
+          clinic_name: clinic.name, date: data.date, time: data.time, sent: false,
+        });
+      }
+      invalidateCache();
+      return mapBooking(apt);
+    }
+    // localStorage
+    const db = loadLocal();
     const booking = {
-      id: 'b' + db.nextBookingId,
-      ...data,
-      status: 'confirmed', // instant confirmation
-      paymentMethod: data.paymentMethod || 'clinic',
-      createdAt: new Date().toISOString(),
+      id: 'b' + db.nextBookingId, ...data, status: 'confirmed',
+      paymentMethod: data.paymentMethod || 'clinic', createdAt: new Date().toISOString(),
     };
     db.nextBookingId++;
     db.bookings.push(booking);
 
-    // Create a reminder
-    const reminder = {
-      id: 'rm' + db.nextReminderId,
-      bookingId: booking.id,
-      patientName: data.patientName,
-      patientPhone: data.patientPhone,
-      doctorName: getDoctor(data.doctorId).name,
-      clinicName: getClinic(getDoctor(data.doctorId).clinicId).name,
-      date: data.date,
-      time: data.time,
-      sent: false,
-      createdAt: new Date().toISOString(),
-    };
+    const doctor = db.doctors.find((d) => d.id === data.doctorId);
+    const clinic = db.clinics.find((c) => c.id === data.clinicId);
+    db.reminders.push({
+      id: 'rm' + db.nextReminderId, bookingId: booking.id,
+      patientName: data.patientName, patientPhone: data.patientPhone,
+      doctorName: doctor ? doctor.name : '', clinicName: clinic ? clinic.name : '',
+      date: data.date, time: data.time, sent: false, createdAt: new Date().toISOString(),
+    });
     db.nextReminderId++;
-    db.reminders.push(reminder);
-
-    save(db);
+    saveLocal(db);
     return booking;
   }
 
-  function updateBookingStatus(bookingId, status) {
-    const db = load();
-    const b = db.bookings.find((x) => x.id === bookingId);
-    if (b) {
-      b.status = status;
-      save(db);
+  async function updateBookingStatus(bookingId, status) {
+    if (isSupabase()) {
+      const { data, error } = await _sb.from('appointments')
+        .update({ status }).eq('id', bookingId).select().single();
+      if (error) throw error;
+      invalidateCache();
+      return mapBooking(data);
     }
+    const db = loadLocal();
+    const b = db.bookings.find((x) => x.id === bookingId);
+    if (b) { b.status = status; saveLocal(db); }
     return b;
   }
 
-  function getBookingsByClinic(clinicId) {
-    const db = load();
-    const doctorIds = db.doctors.filter((d) => d.clinicId === clinicId).map((d) => d.id);
+  async function getBookingsByClinic(clinicId) {
+    const db = await load();
     return db.bookings
-      .filter((b) => doctorIds.includes(b.doctorId))
+      .filter((b) => b.clinicId === clinicId)
       .sort((a, b) => (a.date + a.time > b.date + b.time ? 1 : -1));
   }
 
-  function getBookingsByDoctor(doctorId) {
-    return load()
-      .bookings.filter((b) => b.doctorId === doctorId)
+  async function getBookingsByDoctor(doctorId) {
+    const db = await load();
+    return db.bookings
+      .filter((b) => b.doctorId === doctorId)
       .sort((a, b) => (a.date + a.time > b.date + b.time ? 1 : -1));
   }
 
-  // ---- Clinic schedule management ----------------------------------------
-  function updateSchedule(doctorId, slots, slotDuration) {
-    const db = load();
+  // ---- Schedule Management (async) ----------------------------------------
+  async function updateSchedule(doctorId, slots, slotDuration) {
+    if (isSupabase()) {
+      await _sb.from('schedules').delete().eq('doctor_id', doctorId);
+      if (slots.length > 0) {
+        const rows = slots.map((s) => ({
+          doctor_id: doctorId, day: s.day, start_time: s.start,
+          end_time: s.end, slot_duration: slotDuration,
+        }));
+        await _sb.from('schedules').insert(rows);
+      }
+      invalidateCache();
+      return;
+    }
+    const db = loadLocal();
     let schedule = db.schedules.find((s) => s.doctorId === doctorId);
-    if (schedule) {
-      schedule.slots = slots;
-      schedule.slotDuration = slotDuration;
-    } else {
-      db.schedules.push({ doctorId, slots, slotDuration });
-    }
-    save(db);
+    if (schedule) { schedule.slots = slots; schedule.slotDuration = slotDuration; }
+    else { db.schedules.push({ doctorId, slots, slotDuration }); }
+    saveLocal(db);
   }
 
-  // ---- Admin operations --------------------------------------------------
-  function approveClinic(clinicId) {
-    const db = load();
-    const c = db.clinics.find((x) => x.id === clinicId);
-    if (c) {
-      c.status = 'approved';
-      save(db);
+  // ---- Admin Operations (async) -------------------------------------------
+  async function approveClinic(clinicId) {
+    if (isSupabase()) {
+      const { data, error } = await _sb.from('clinics')
+        .update({ status: 'approved' }).eq('id', clinicId).select().single();
+      if (error) throw error;
+      invalidateCache();
+      return mapClinic(data);
     }
+    const db = loadLocal();
+    const c = db.clinics.find((x) => x.id === clinicId);
+    if (c) { c.status = 'approved'; saveLocal(db); }
     return c;
   }
 
-  function rejectClinic(clinicId) {
-    const db = load();
-    const c = db.clinics.find((x) => x.id === clinicId);
-    if (c) {
-      c.status = 'rejected';
-      save(db);
+  async function rejectClinic(clinicId) {
+    if (isSupabase()) {
+      const { data, error } = await _sb.from('clinics')
+        .update({ status: 'rejected' }).eq('id', clinicId).select().single();
+      if (error) throw error;
+      invalidateCache();
+      return mapClinic(data);
     }
+    const db = loadLocal();
+    const c = db.clinics.find((x) => x.id === clinicId);
+    if (c) { c.status = 'rejected'; saveLocal(db); }
     return c;
   }
 
-  function addClinic(data) {
-    const db = load();
+  async function addClinic(data) {
+    if (isSupabase()) {
+      const { data: clinic, error } = await _sb.from('clinics').insert({
+        name: data.name, city_id: data.cityId, area: data.area,
+        address: data.address, phone: data.phone,
+        lat: data.lat || 0, lng: data.lng || 0, status: 'pending',
+      }).select().single();
+      if (error) throw error;
+      invalidateCache();
+      return mapClinic(clinic);
+    }
+    const db = loadLocal();
     const clinic = {
-      id: 'cl' + (db.clinics.length + 1),
-      ...data,
-      status: 'pending',
-      createdAt: new Date().toISOString(),
+      id: 'cl' + (db.clinics.length + 1), ...data,
+      status: 'pending', createdAt: new Date().toISOString(),
     };
     db.clinics.push(clinic);
-    save(db);
+    saveLocal(db);
     return clinic;
   }
 
-  function addDoctor(data) {
-    const db = load();
+  async function addDoctor(data) {
+    if (isSupabase()) {
+      const { data: doctor, error } = await _sb.from('doctors').insert({
+        name: data.name, name_en: data.nameEn, specialty_id: data.specialtyId,
+        clinic_id: data.clinicId, photo: data.photo || '', bio: data.bio || '',
+        qualifications: data.qualifications || '',
+        experience_years: data.experienceYears || 0,
+        price: data.price, gender: data.gender || 'male',
+        languages: data.languages || ['العربية'],
+        services: data.services || ['clinic'],
+        rating: 0, reviews_count: 0, verified: false, featured: false,
+      }).select().single();
+      if (error) throw error;
+      invalidateCache();
+      return mapDoctor(doctor);
+    }
+    const db = loadLocal();
     const doctor = {
-      id: 'd' + (db.doctors.length + 1),
-      ...data,
-      rating: 0,
-      reviewsCount: 0,
-      verified: false,
-      featured: false,
+      id: 'd' + (db.doctors.length + 1), ...data,
+      rating: 0, reviewsCount: 0, verified: false, featured: false,
     };
     db.doctors.push(doctor);
-    save(db);
+    saveLocal(db);
     return doctor;
   }
 
-  // ---- Auth --------------------------------------------------------------
-  function clinicLogin(username, password) {
-    const db = load();
+  // ---- Auth (async) -------------------------------------------------------
+  // NOTE: In production, replace with Supabase Auth (email + password).
+  // For now, we query the clinic_users / admin_users tables directly.
+  async function clinicLogin(username, password) {
+    if (isSupabase()) {
+      const { data: user } = await _sb.from('clinic_users')
+        .select('*').eq('username', username).eq('password', password).single();
+      if (!user) return null;
+      const { data: clinic } = await _sb.from('clinics')
+        .select('*').eq('id', user.clinic_id).single();
+      return {
+        user: { id: user.id, clinicId: user.clinic_id, username: user.username, name: user.name },
+        clinic: clinic ? mapClinic(clinic) : null,
+      };
+    }
+    const db = loadLocal();
     const user = db.clinicUsers.find(
       (u) => u.username === username && u.password === password
     );
     if (user) {
-      const clinic = getClinic(user.clinicId);
+      const clinic = db.clinics.find((c) => c.id === user.clinicId);
       return { user, clinic };
     }
     return null;
   }
 
-  function adminLogin(username, password) {
-    const db = load();
+  async function adminLogin(username, password) {
+    if (isSupabase()) {
+      const { data } = await _sb.from('admin_users')
+        .select('*').eq('username', username).eq('password', password).single();
+      return data || null;
+    }
+    const db = loadLocal();
     return db.adminUsers.find(
       (u) => u.username === username && u.password === password
     ) || null;
   }
 
-  // ---- Reminders ---------------------------------------------------------
-  function getPendingReminders() {
-    return load().reminders.filter((r) => !r.sent);
+  // ---- Reminders (async) --------------------------------------------------
+  async function getPendingReminders() {
+    const db = await load();
+    return db.reminders.filter((r) => !r.sent);
   }
 
-  function markReminderSent(reminderId) {
-    const db = load();
-    const r = db.reminders.find((x) => x.id === reminderId);
-    if (r) {
-      r.sent = true;
-      r.sentAt = new Date().toISOString();
-      save(db);
+  async function markReminderSent(reminderId) {
+    if (isSupabase()) {
+      const { data, error } = await _sb.from('reminders')
+        .update({ sent: true, sent_at: new Date().toISOString() })
+        .eq('id', reminderId).select().single();
+      if (error) throw error;
+      invalidateCache();
+      return mapReminder(data);
     }
+    const db = loadLocal();
+    const r = db.reminders.find((x) => x.id === reminderId);
+    if (r) { r.sent = true; r.sentAt = new Date().toISOString(); saveLocal(db); }
     return r;
   }
 
-  // ---- Stats -------------------------------------------------------------
-  function getStats() {
-    const db = load();
+  // ---- Stats (async) ------------------------------------------------------
+  async function getStats() {
+    const db = await load();
     const totalRevenue = db.bookings
       .filter((b) => b.status === 'completed')
       .reduce((sum, b) => sum + (b.price || 0), 0);
@@ -585,10 +586,18 @@ const SahatnaDB = (function () {
     };
   }
 
+  // ---- Reset (async) ------------------------------------------------------
+  async function reset() {
+    if (isSupabase()) {
+      invalidateCache();
+      return;
+    }
+    return resetLocal();
+  }
+
   // ---- Public API --------------------------------------------------------
   return {
     load,
-    save,
     reset,
     getSpecialty,
     getCity,
