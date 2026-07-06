@@ -348,6 +348,7 @@ async function renderClinicDoctors() {
     const docBookings = await SahatnaDB.getBookingsByDoctor(d.id);
     const completed = docBookings.filter((b) => b.status === 'completed').length;
     const revenue = docBookings.filter((b) => b.status === 'completed').reduce((sum, b) => sum + b.price, 0);
+    const safeName = d.name.replace(/'/g, "\\'");
 
     cards.push(`
       <div class="border border-gray-200 rounded-2xl p-4 bg-white">
@@ -361,6 +362,7 @@ async function renderClinicDoctors() {
             <p class="text-sm text-primary">${specialty ? specialty.name : ''}</p>
             <p class="text-xs text-gray-500 mt-1">خبرة ${d.experienceYears} سنة • ⭐ ${d.rating} (${d.reviewsCount})</p>
           </div>
+          <button onclick="deleteDoctor('${d.id}', '${safeName}')" class="btn-danger text-xs flex-shrink-0 self-start">🗑️ حذف</button>
         </div>
         <div class="grid grid-cols-3 gap-2 mt-3 pt-3 border-t border-gray-100 text-center">
           <div><p class="text-xs text-gray-400">السعر</p><p class="font-bold text-sm text-primary">${formatPrice(d.price)}</p></div>
@@ -371,6 +373,22 @@ async function renderClinicDoctors() {
     `);
   }
   list.innerHTML = cards.join('');
+}
+
+// ---- Delete Doctor -------------------------------------------------------
+async function deleteDoctor(doctorId, doctorName) {
+  if (confirm(`هل أنت متأكد من حذف الطبيب "${doctorName}"؟\n\nسيتم حذف:\n• بيانات الطبيب\n• جدول الدوام\n• التقييمات\n\nملاحظة: الحجوزات الحالية لن تُحذف.`)) {
+    try {
+      await SahatnaDB.deleteDoctor(doctorId);
+      showToast('تم حذف الطبيب بنجاح', 'success');
+      await renderClinicDoctors();
+      await populateScheduleDoctorSelect();
+      await populateBookingFilters();
+      await renderClinicStats();
+    } catch (e) {
+      showToast('حدث خطأ أثناء حذف الطبيب: ' + e.message, 'error');
+    }
+  }
 }
 
 // ---- Add Doctor (Self-service) ------------------------------------------

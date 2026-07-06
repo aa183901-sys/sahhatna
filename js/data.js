@@ -507,6 +507,22 @@ const SahatnaDB = (function () {
     return doctor;
   }
 
+  async function deleteDoctor(doctorId) {
+    if (isSupabase()) {
+      // Schedules and reviews cascade-delete via ON DELETE CASCADE
+      const { error } = await _sb.from('doctors').delete().eq('id', doctorId);
+      if (error) throw error;
+      invalidateCache();
+      return true;
+    }
+    const db = loadLocal();
+    db.doctors = db.doctors.filter((d) => d.id !== doctorId);
+    db.schedules = db.schedules.filter((s) => s.doctorId !== doctorId);
+    db.reviews = db.reviews.filter((r) => r.doctorId !== doctorId);
+    saveLocal(db);
+    return true;
+  }
+
   // ---- Auth (async) -------------------------------------------------------
   // Supabase mode: uses supabase.auth.signInWithPassword (no plain-text passwords).
   // Email convention: username@sahatna.app
@@ -662,6 +678,7 @@ const SahatnaDB = (function () {
     rejectClinic,
     addClinic,
     addDoctor,
+    deleteDoctor,
     clinicLogin,
     adminLogin,
     signOut,
