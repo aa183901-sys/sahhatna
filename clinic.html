@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>صحتنا - لوحة تحكم العيادة</title>
+
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            primary: { DEFAULT: '#0d9488', dark: '#0f766e', light: '#14b8a6', lighter: '#ccfbf1' },
+          },
+          fontFamily: { sans: ['Cairo', 'Tajawal', 'system-ui', 'sans-serif'] },
+        },
+      },
+    };
+  </script>
+
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+
+  <!-- Custom Styles -->
+  <link rel="stylesheet" href="css/styles.css" />
+</head>
+<body class="bg-gray-50 min-h-screen">
+
+  <!-- ===== Login Screen ===== -->
+  <div id="loginScreen" class="min-h-screen flex items-center justify-center p-4">
+    <div class="bg-white rounded-2xl shadow-xl p-8 max-w-md w-full">
+      <div class="text-center mb-6">
+        <div class="w-16 h-16 bg-primary rounded-2xl flex items-center justify-center text-white text-3xl font-bold mx-auto mb-3">+</div>
+        <h1 class="text-2xl font-bold text-gray-800">لوحة تحكم العيادة</h1>
+        <p class="text-gray-500 mt-1">سجّل دخولك لإدارة حجوزاتك</p>
+      </div>
+
+      <form onsubmit="handleClinicLogin(event)" class="space-y-4">
+        <div>
+          <label class="block text-sm font-semibold text-gray-600 mb-1">اسم المستخدم</label>
+          <input type="text" id="loginUsername" required placeholder="مثال: cl1" class="form-input" />
+        </div>
+        <div>
+          <label class="block text-sm font-semibold text-gray-600 mb-1">كلمة المرور</label>
+          <input type="password" id="loginPassword" required placeholder="••••" class="form-input" />
+        </div>
+        <button type="submit" class="btn-primary w-full">تسجيل الدخول</button>
+      </form>
+
+      <!-- Demo credentials -->
+      <div class="mt-6 bg-info-light rounded-xl p-4 text-sm">
+        <p class="font-semibold text-info mb-2">🔑 حسابات تجريبية:</p>
+        <div class="space-y-1 text-gray-600">
+          <p>• مركز الشفاء: <code class="bg-white px-2 py-0.5 rounded">cl1 / 1234</code></p>
+          <p>• عيادة النور: <code class="bg-white px-2 py-0.5 rounded">cl2 / 1234</code></p>
+          <p>• مستشفى الحياة: <code class="bg-white px-2 py-0.5 rounded">cl3 / 1234</code></p>
+        </div>
+      </div>
+
+      <div class="mt-4 text-center">
+        <a href="index.html" class="text-sm text-gray-400 hover:text-primary">← العودة للموقع</a>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== Dashboard (hidden until login) ===== -->
+  <div id="dashboard" class="hidden">
+    <!-- Top Bar -->
+    <header class="bg-white shadow-sm sticky top-0 z-40">
+      <div class="max-w-7xl mx-auto px-4 sm:px-6">
+        <div class="flex items-center justify-between h-16">
+          <div class="flex items-center gap-3">
+            <div class="w-10 h-10 bg-primary rounded-xl flex items-center justify-center text-white text-xl font-bold">+</div>
+            <div>
+              <h1 class="text-lg font-bold text-gray-800">صحتنا</h1>
+              <p class="text-xs text-gray-500 -mt-1" id="clinicNameHeader">لوحة العيادة</p>
+            </div>
+          </div>
+          <div class="flex items-center gap-3">
+            <a href="index.html" class="text-sm text-gray-500 hover:text-primary hide-mobile">عرض الموقع</a>
+            <button onclick="clinicLogout()" class="btn-danger text-sm">خروج</button>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 py-6">
+      <!-- Welcome -->
+      <div class="mb-6">
+        <h2 class="text-2xl font-bold text-gray-800" id="welcomeMsg">مرحباً</h2>
+        <p class="text-gray-500" id="clinicInfo"></p>
+      </div>
+
+      <!-- Stats Cards -->
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+        <div class="stat-card">
+          <div class="flex items-center justify-between">
+            <div>
+              <p class="text-sm text-gray-400">حجوزات اليوم</p>
+              <p class="text-2xl font-bold text-primary" id="statTodayBookings">0</p>
+            </div>
+            <div class="text-3xl">📅</div>
+          </div>
+        </div>
+        <div class="stat-card">
+          <div class="flex items-center justify-between">
+            <div>
+              <p class="text-sm text-gray-400">إجمالي الحجوزات</p>
+              <p class="text-2xl font-bold text-info" id="statTotalBookings">0</p>
+            </div>
+            <div class="text-3xl">📊</div>
+          </div>
+        </div>
+        <div class="stat-card">
+          <div class="flex items-center justify-between">
+            <div>
+              <p class="text-sm text-gray-400">الأطباء</p>
+              <p class="text-2xl font-bold text-success" id="statDoctorsCount">0</p>
+            </div>
+            <div class="text-3xl">👨‍⚕️</div>
+          </div>
+        </div>
+        <div class="stat-card">
+          <div class="flex items-center justify-between">
+            <div>
+              <p class="text-sm text-gray-400">مكتمل / ملغي</p>
+              <p class="text-2xl font-bold">
+                <span class="text-success" id="statCompleted">0</span>
+                <span class="text-gray-300 text-lg">/</span>
+                <span class="text-danger" id="statCancelled">0</span>
+              </p>
+            </div>
+            <div class="text-3xl">📈</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Tabs -->
+      <div class="bg-white rounded-2xl shadow-sm overflow-hidden">
+        <div class="flex border-b border-gray-200 overflow-x-auto scrollbar-hide">
+          <button class="tab-btn active" data-tab="bookings" onclick="switchTab('bookings')">📅 الحجوزات</button>
+          <button class="tab-btn" data-tab="calendar" onclick="switchTab('calendar')">🗓️ التقويم</button>
+          <button class="tab-btn" data-tab="doctors" onclick="switchTab('doctors')">👨‍⚕️ الأطباء</button>
+          <button class="tab-btn" data-tab="schedule" onclick="switchTab('schedule')">⏰ الدوام</button>
+          <button class="tab-btn" data-tab="reminders" onclick="switchTab('reminders')">📱 التذكيرات</button>
+        </div>
+
+        <!-- Tab: Bookings -->
+        <div id="tab-bookings" class="tab-content p-4 md:p-6">
+          <div class="flex flex-wrap items-center gap-3 mb-4">
+            <h3 class="text-lg font-bold text-gray-800">قائمة الحجوزات</h3>
+            <select id="bookingFilterStatus" onchange="renderBookingsList()" class="form-input max-w-[150px]">
+              <option value="">كل الحالات</option>
+              <option value="confirmed">مؤكد</option>
+              <option value="completed">مكتمل</option>
+              <option value="cancelled">ملغي</option>
+            </select>
+            <select id="bookingFilterDoctor" onchange="renderBookingsList()" class="form-input max-w-[200px]">
+              <option value="">كل الأطباء</option>
+            </select>
+          </div>
+          <div id="bookingsList" class="space-y-3"></div>
+        </div>
+
+        <!-- Tab: Calendar -->
+        <div id="tab-calendar" class="tab-content p-4 md:p-6 hidden">
+          <div class="flex items-center justify-between mb-4">
+            <h3 class="text-lg font-bold text-gray-800">تقويم الحجوزات</h3>
+            <div class="flex items-center gap-2">
+              <button onclick="changeCalendarMonth(-1)" class="btn-secondary px-3 py-1">→</button>
+              <span id="calendarMonthLabel" class="font-bold text-gray-700 min-w-[120px] text-center"></span>
+              <button onclick="changeCalendarMonth(1)" class="btn-secondary px-3 py-1">←</button>
+            </div>
+          </div>
+          <div id="calendarGrid" class="grid grid-cols-7 gap-1"></div>
+          <div id="calendarDayDetail" class="mt-4"></div>
+        </div>
+
+        <!-- Tab: Doctors -->
+        <div id="tab-doctors" class="tab-content p-4 md:p-6 hidden">
+          <h3 class="text-lg font-bold text-gray-800 mb-4">أطباء العيادة</h3>
+          <div id="doctorsListClinic" class="grid md:grid-cols-2 gap-4"></div>
+        </div>
+
+        <!-- Tab: Schedule -->
+        <div id="tab-schedule" class="tab-content p-4 md:p-6 hidden">
+          <h3 class="text-lg font-bold text-gray-800 mb-4">إدارة أوقات الدوام</h3>
+          <div class="mb-4">
+            <label class="block text-sm font-semibold text-gray-600 mb-1">اختر الطبيب</label>
+            <select id="scheduleDoctorSelect" onchange="loadDoctorSchedule()" class="form-input max-w-xs"></select>
+          </div>
+          <div id="scheduleEditor"></div>
+        </div>
+
+        <!-- Tab: Reminders -->
+        <div id="tab-reminders" class="tab-content p-4 md:p-6 hidden">
+          <div class="flex items-center justify-between mb-4">
+            <h3 class="text-lg font-bold text-gray-800">رسائل التذكير</h3>
+            <button onclick="sendAllReminders()" class="btn-primary text-sm">
+              📤 إرسال كل التذكيرات
+            </button>
+          </div>
+          <div class="bg-info-light rounded-xl p-3 mb-4 text-sm text-info">
+            ℹ️ التذكيرات تُرسل تلقائياً قبل الموعد. هنا تقدر تشاهد وتدير التذكيرات اللي راح تُرسل.
+          </div>
+          <div id="remindersList" class="space-y-3"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast Container -->
+  <div id="toastContainer"></div>
+
+  <!-- Scripts -->
+  <script src="js/data.js"></script>
+  <script src="js/clinic.js"></script>
+</body>
+</html>

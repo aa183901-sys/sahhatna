@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>صحتنا - احجز موعدك الطبي أونلاين</title>
+  <meta name="description" content="صحتنا - منصة حجز المواعيد الطبية في العراق. ابحث عن أفضل الأطباء والعيادات واحجز موعدك بسهولة." />
+
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            primary: { DEFAULT: '#0d9488', dark: '#0f766e', light: '#14b8a6', lighter: '#ccfbf1' },
+          },
+          fontFamily: {
+            sans: ['Cairo', 'Tajawal', 'system-ui', 'sans-serif'],
+          },
+        },
+      },
+    };
+  </script>
+
+  <!-- Google Fonts: Cairo -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+
+  <!-- Custom Styles -->
+  <link rel="stylesheet" href="css/styles.css" />
+</head>
+<body class="min-h-screen">
+
+  <!-- ===== Header ===== -->
+  <header class="bg-white shadow-sm sticky top-0 z-40">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6">
+      <div class="flex items-center justify-between h-16">
+        <!-- Logo -->
+        <a href="index.html" class="flex items-center gap-2">
+          <div class="w-10 h-10 bg-primary rounded-xl flex items-center justify-center text-white text-xl font-bold">+</div>
+          <div>
+            <h1 class="text-xl font-bold text-gray-800">صحتنا</h1>
+            <p class="text-xs text-gray-500 -mt-1">رعايتك الصحية تبدأ هنا</p>
+          </div>
+        </a>
+
+        <!-- Desktop Nav -->
+        <nav class="hidden md:flex items-center gap-6">
+          <a href="#search" class="text-gray-600 hover:text-primary font-medium transition">الأطباء</a>
+          <a href="#specialties" class="text-gray-600 hover:text-primary font-medium transition">التخصصات</a>
+          <a href="#how-it-works" class="text-gray-600 hover:text-primary font-medium transition">كيف يعمل؟</a>
+          <a href="clinic.html" class="text-gray-600 hover:text-primary font-medium transition">دخول العيادة</a>
+          <a href="admin.html" class="text-gray-600 hover:text-primary font-medium transition">الإدارة</a>
+        </nav>
+
+        <!-- Mobile menu button -->
+        <button id="mobileMenuBtn" class="md:hidden p-2 rounded-lg hover:bg-gray-100">
+          <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
+          </svg>
+        </button>
+      </div>
+
+      <!-- Mobile Nav -->
+      <div id="mobileMenu" class="hidden md:hidden pb-4 space-y-2">
+        <a href="#search" class="block px-4 py-2 text-gray-600 hover:bg-gray-50 rounded-lg font-medium">الأطباء</a>
+        <a href="#specialties" class="block px-4 py-2 text-gray-600 hover:bg-gray-50 rounded-lg font-medium">التخصصات</a>
+        <a href="#how-it-works" class="block px-4 py-2 text-gray-600 hover:bg-gray-50 rounded-lg font-medium">كيف يعمل؟</a>
+        <a href="clinic.html" class="block px-4 py-2 text-gray-600 hover:bg-gray-50 rounded-lg font-medium">دخول العيادة</a>
+        <a href="admin.html" class="block px-4 py-2 text-gray-600 hover:bg-gray-50 rounded-lg font-medium">الإدارة</a>
+      </div>
+    </div>
+  </header>
+
+  <!-- ===== Hero Section ===== -->
+  <section class="bg-gradient-to-br from-primary via-primary-dark to-teal-800 text-white">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 py-12 md:py-20">
+      <div class="grid md:grid-cols-2 gap-8 items-center">
+        <div class="animate-slide-up">
+          <h2 class="text-3xl md:text-4xl font-bold mb-4 leading-tight">
+            احجز موعدك مع أفضل الأطباء في العراق
+          </h2>
+          <p class="text-lg text-teal-100 mb-6">
+            منصة صحتنا تربطك بأطباء موثوقين في مختلف التخصصات. ابحث، اختر الوقت المناسب، واحجز فوراً — بدون انتظار.
+          </p>
+          <div class="flex flex-wrap gap-3">
+            <a href="#search" class="bg-white text-primary px-6 py-3 rounded-xl font-bold hover:bg-teal-50 transition shadow-lg">
+              ابحث عن طبيب
+            </a>
+            <a href="#how-it-works" class="border-2 border-white text-white px-6 py-3 rounded-xl font-bold hover:bg-white hover:text-primary transition">
+              كيف يعمل؟
+            </a>
+          </div>
+
+          <!-- Quick stats -->
+          <div class="grid grid-cols-3 gap-4 mt-8">
+            <div class="text-center">
+              <div class="text-2xl font-bold" id="statDoctors">-</div>
+              <div class="text-sm text-teal-200">طبيب متخصص</div>
+            </div>
+            <div class="text-center">
+              <div class="text-2xl font-bold" id="statClinics">-</div>
+              <div class="text-sm text-teal-200">عيادة ومركز</div>
+            </div>
+            <div class="text-center">
+              <div class="text-2xl font-bold" id="statSpecialties">-</div>
+              <div class="text-sm text-teal-200">تخصص طبي</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Hero illustration -->
+        <div class="hidden md:flex justify-center animate-scale-in">
+          <div class="relative">
+            <div class="w-80 h-80 bg-white/10 rounded-full flex items-center justify-center backdrop-blur-sm">
+              <div class="text-9xl">🏥</div>
+            </div>
+            <div class="absolute -top-4 -right-4 bg-white rounded-2xl p-3 shadow-xl animate-pulse">
+              <div class="flex items-center gap-2">
+                <span class="text-2xl">📅</span>
+                <div>
+                  <div class="text-xs text-gray-500">حجز فوري</div>
+                  <div class="text-sm font-bold text-gray-800">متاح 24/7</div>
+                </div>
+              </div>
+            </div>
+            <div class="absolute -bottom-4 -left-4 bg-white rounded-2xl p-3 shadow-xl">
+              <div class="flex items-center gap-2">
+                <span class="text-2xl">✅</span>
+                <div>
+                  <div class="text-xs text-gray-500">أطباء موثوقون</div>
+                  <div class="text-sm font-bold text-gray-800">موثّقون 100%</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== Search Section ===== -->
+  <section id="search" class="max-w-7xl mx-auto px-4 sm:px-6 py-8">
+    <!-- Search Bar -->
+    <div class="bg-white rounded-2xl shadow-lg p-4 md:p-6 -mt-12 relative z-10">
+      <div class="grid md:grid-cols-4 gap-3">
+        <div class="md:col-span-2">
+          <label class="block text-sm font-semibold text-gray-600 mb-1">اسم الطبيب أو التخصص</label>
+          <input id="searchName" type="text" placeholder="مثال: باطنية، د. أحمد..." class="form-input" />
+        </div>
+        <div>
+          <label class="block text-sm font-semibold text-gray-600 mb-1">المدينة</label>
+          <select id="searchCity" class="form-input">
+            <option value="">كل المدن</option>
+          </select>
+        </div>
+        <div>
+          <label class="block text-sm font-semibold text-gray-600 mb-1">التخصص</label>
+          <select id="searchSpecialty" class="form-input">
+            <option value="">كل التخصصات</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- Advanced filters -->
+      <div class="flex flex-wrap items-center gap-3 mt-4 pt-4 border-t border-gray-100">
+        <span class="text-sm font-semibold text-gray-600">تصفية:</span>
+        <label class="flex items-center gap-2 text-sm cursor-pointer">
+          <input type="checkbox" id="filterToday" class="rounded text-primary focus:ring-primary" />
+          مواعيد متاحة اليوم
+        </label>
+        <label class="flex items-center gap-2 text-sm cursor-pointer">
+          <input type="checkbox" id="filterVideo" class="rounded text-primary focus:ring-primary" />
+          استشارة فيديو
+        </label>
+        <label class="flex items-center gap-2 text-sm cursor-pointer">
+          <input type="checkbox" id="filterHome" class="rounded text-primary focus:ring-primary" />
+          زيارة منزلية
+        </label>
+        <label class="flex items-center gap-2 text-sm cursor-pointer">
+          <input type="checkbox" id="filterFemale" class="rounded text-primary focus:ring-primary" />
+          طبيبة
+        </label>
+        <button id="clearFilters" class="text-sm text-gray-400 hover:text-danger mr-auto">مسح التصفية</button>
+      </div>
+    </div>
+
+    <!-- Results -->
+    <div class="mt-6">
+      <div class="flex items-center justify-between mb-4">
+        <h3 class="text-lg font-bold text-gray-800">
+          نتائج البحث <span id="resultsCount" class="text-gray-400 font-normal text-sm"></span>
+        </h3>
+        <select id="sortBy" class="form-input max-w-[180px]">
+          <option value="rating">الأعلى تقييماً</option>
+          <option value="price-low">السعر: من الأقل للأعلى</option>
+          <option value="price-high">السعر: من الأعلى للأقل</option>
+          <option value="experience">الأكثر خبرة</option>
+        </select>
+      </div>
+      <div id="doctorsList" class="grid md:grid-cols-2 gap-4">
+        <!-- Doctor cards injected here -->
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== Specialties Section ===== -->
+  <section id="specialties" class="bg-white py-12">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6">
+      <h3 class="text-2xl font-bold text-gray-800 text-center mb-2">تصفح حسب التخصص</h3>
+      <p class="text-gray-500 text-center mb-8">اختر التخصص المناسب لاحتياجك الصحية</p>
+      <div id="specialtiesGrid" class="grid grid-cols-3 md:grid-cols-6 gap-4">
+        <!-- Specialty cards injected here -->
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== How It Works ===== -->
+  <section id="how-it-works" class="max-w-7xl mx-auto px-4 sm:px-6 py-12">
+    <h3 class="text-2xl font-bold text-gray-800 text-center mb-2">كيف تحجز موعدك؟</h3>
+    <p class="text-gray-500 text-center mb-8">ثلاث خطوات بسيطة تفصلك عن طبيبك</p>
+    <div class="grid md:grid-cols-3 gap-6">
+      <div class="text-center p-6 bg-white rounded-2xl border border-gray-200 card-hover">
+        <div class="w-16 h-16 bg-primary-lighter text-primary rounded-2xl flex items-center justify-center text-3xl mx-auto mb-4">🔍</div>
+        <h4 class="font-bold text-lg mb-2">1. ابحث عن طبيب</h4>
+        <p class="text-gray-500 text-sm">اختر التخصص والمدينة المناسبة لك من قائمة الأطباء الموثوقين</p>
+      </div>
+      <div class="text-center p-6 bg-white rounded-2xl border border-gray-200 card-hover">
+        <div class="w-16 h-16 bg-primary-lighter text-primary rounded-2xl flex items-center justify-center text-3xl mx-auto mb-4">📅</div>
+        <h4 class="font-bold text-lg mb-2">2. اختر الموعد</h4>
+        <p class="text-gray-500 text-sm">تصفح الأوقات المتاحة واختر الوقت الذي يناسبك — التأكيد فوري</p>
+      </div>
+      <div class="text-center p-6 bg-white rounded-2xl border border-gray-200 card-hover">
+        <div class="w-16 h-16 bg-primary-lighter text-primary rounded-2xl flex items-center justify-center text-3xl mx-auto mb-4">🏥</div>
+        <h4 class="font-bold text-lg mb-2">3. احضر للعيادة</h4>
+        <p class="text-gray-500 text-sm">ادفع عند الحضور للعيادة. سيصلك تذكير قبل الموعد برسالة نصية</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== Footer ===== -->
+  <footer class="bg-gray-800 text-gray-300 py-8 mt-12">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6">
+      <div class="grid md:grid-cols-3 gap-8">
+        <div>
+          <div class="flex items-center gap-2 mb-3">
+            <div class="w-10 h-10 bg-primary rounded-xl flex items-center justify-center text-white text-xl font-bold">+</div>
+            <h3 class="text-xl font-bold text-white">صحتنا</h3>
+          </div>
+          <p class="text-sm text-gray-400">منصة صحتنا تربط المرضى بأفضل الأطباء والعيادات في العراق. رعايتك الصحية تبدأ من هنا.</p>
+        </div>
+        <div>
+          <h4 class="font-bold text-white mb-3">روابط سريعة</h4>
+          <ul class="space-y-2 text-sm">
+            <li><a href="#search" class="hover:text-primary">بحث عن طبيب</a></li>
+            <li><a href="#specialties" class="hover:text-primary">التخصصات</a></li>
+            <li><a href="#how-it-works" class="hover:text-primary">كيف يعمل؟</a></li>
+          </ul>
+        </div>
+        <div>
+          <h4 class="font-bold text-white mb-3">للعيادات والأطباء</h4>
+          <ul class="space-y-2 text-sm">
+            <li><a href="clinic.html" class="hover:text-primary">تسجيل دخول العيادة</a></li>
+            <li><a href="admin.html" class="hover:text-primary">لوحة الإدارة</a></li>
+            <li><a href="#" onclick="openRegisterModal(); return false;" class="hover:text-primary">سجّل عيادتك معنا</a></li>
+          </ul>
+        </div>
+      </div>
+      <div class="border-t border-gray-700 mt-6 pt-6 text-center text-sm text-gray-400">
+        © 2025 صحتنا — جميع الحقوق محفوظة. صُنع للعراق 🇮🇶
+      </div>
+    </div>
+  </footer>
+
+  <!-- ===== Doctor Profile & Booking Modal ===== -->
+  <div id="doctorModal" class="hidden"></div>
+
+  <!-- ===== Booking Success Modal ===== -->
+  <div id="successModal" class="hidden"></div>
+
+  <!-- ===== Clinic Registration Modal ===== -->
+  <div id="registerModal" class="hidden"></div>
+
+  <!-- ===== Toast Container ===== -->
+  <div id="toastContainer"></div>
+
+  <!-- Scripts -->
+  <script src="js/data.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>

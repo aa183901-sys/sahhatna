@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>صحتنا - لوحة تحكم الإدارة</title>
+
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            primary: { DEFAULT: '#0d9488', dark: '#0f766e', light: '#14b8a6', lighter: '#ccfbf1' },
+          },
+          fontFamily: { sans: ['Cairo', 'Tajawal', 'system-ui', 'sans-serif'] },
+        },
+      },
+    };
+  </script>
+
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+
+  <!-- Custom Styles -->
+  <link rel="stylesheet" href="css/styles.css" />
+</head>
+<body class="bg-gray-50 min-h-screen">
+
+  <!-- ===== Login Screen ===== -->
+  <div id="adminLoginScreen" class="min-h-screen flex items-center justify-center p-4">
+    <div class="bg-white rounded-2xl shadow-xl p-8 max-w-md w-full">
+      <div class="text-center mb-6">
+        <div class="w-16 h-16 bg-primary rounded-2xl flex items-center justify-center text-white text-3xl font-bold mx-auto mb-3">+</div>
+        <h1 class="text-2xl font-bold text-gray-800">لوحة تحكم الإدارة</h1>
+        <p class="text-gray-500 mt-1">إدارة منصة صحتنا</p>
+      </div>
+
+      <form onsubmit="handleAdminLogin(event)" class="space-y-4">
+        <div>
+          <label class="block text-sm font-semibold text-gray-600 mb-1">اسم المستخدم</label>
+          <input type="text" id="adminUsername" required placeholder="admin" class="form-input" />
+        </div>
+        <div>
+          <label class="block text-sm font-semibold text-gray-600 mb-1">كلمة المرور</label>
+          <input type="password" id="adminPassword" required placeholder="••••••" class="form-input" />
+        </div>
+        <button type="submit" class="btn-primary w-full">تسجيل الدخول</button>
+      </form>
+
+      <div class="mt-6 bg-info-light rounded-xl p-4 text-sm">
+        <p class="font-semibold text-info mb-1">🔑 حساب تجريبي:</p>
+        <p class="text-gray-600"><code class="bg-white px-2 py-0.5 rounded">admin / admin123</code></p>
+      </div>
+
+      <div class="mt-4 text-center">
+        <a href="index.html" class="text-sm text-gray-400 hover:text-primary">← العودة للموقع</a>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== Admin Dashboard ===== -->
+  <div id="adminDashboard" class="hidden">
+    <!-- Top Bar -->
+    <header class="bg-white shadow-sm sticky top-0 z-40">
+      <div class="max-w-7xl mx-auto px-4 sm:px-6">
+        <div class="flex items-center justify-between h-16">
+          <div class="flex items-center gap-3">
+            <div class="w-10 h-10 bg-primary rounded-xl flex items-center justify-center text-white text-xl font-bold">+</div>
+            <div>
+              <h1 class="text-lg font-bold text-gray-800">صحتنا — الإدارة</h1>
+              <p class="text-xs text-gray-500 -mt-1">لوحة التحكم العامة</p>
+            </div>
+          </div>
+          <div class="flex items-center gap-3">
+            <a href="index.html" class="text-sm text-gray-500 hover:text-primary hide-mobile">عرض الموقع</a>
+            <button onclick="adminLogout()" class="btn-danger text-sm">خروج</button>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 py-6">
+      <!-- Welcome -->
+      <div class="mb-6">
+        <h2 class="text-2xl font-bold text-gray-800">مرحباً، مدير صحتنا 👋</h2>
+        <p class="text-gray-500">نظرة عامة على أداء المنصة</p>
+      </div>
+
+      <!-- Stats Cards -->
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+        <div class="stat-card">
+          <div class="flex items-center justify-between">
+            <div>
+              <p class="text-sm text-gray-400">إجمالي المستخدمين</p>
+              <p class="text-2xl font-bold text-primary" id="adminStatPatients">0</p>
+            </div>
+            <div class="text-3xl">👥</div>
+          </div>
+        </div>
+        <div class="stat-card">
+          <div class="flex items-center justify-between">
+            <div>
+              <p class="text-sm text-gray-400">العيادات</p>
+              <p class="text-2xl font-bold text-info">
+                <span id="adminStatApproved">0</span>
+                <span class="text-sm text-gray-400 font-normal">/ <span id="adminStatTotalClinics">0</span></span>
+              </p>
+              <p class="text-xs text-success mt-1" id="adminStatPending">0 بانتظار الموافقة</p>
+            </div>
+            <div class="text-3xl">🏥</div>
+          </div>
+        </div>
+        <div class="stat-card">
+          <div class="flex items-center justify-between">
+            <div>
+              <p class="text-sm text-gray-400">الأطباء</p>
+              <p class="text-2xl font-bold text-success" id="adminStatDoctors">0</p>
+            </div>
+            <div class="text-3xl">👨‍⚕️</div>
+          </div>
+        </div>
+        <div class="stat-card">
+          <div class="flex items-center justify-between">
+            <div>
+              <p class="text-sm text-gray-400">إجمالي الحجوزات</p>
+              <p class="text-2xl font-bold text-warning" id="adminStatBookings">0</p>
+            </div>
+            <div class="text-3xl">📅</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Revenue & Booking Status -->
+      <div class="grid md:grid-cols-2 gap-4 mb-6">
+        <div class="stat-card">
+          <h3 class="font-bold text-gray-800 mb-3">حالة الحجوزات</h3>
+          <div class="space-y-3">
+            <div class="flex items-center justify-between">
+              <span class="flex items-center gap-2"><span class="badge badge-info">مؤكد</span></span>
+              <span class="font-bold" id="adminStatConfirmed">0</span>
+            </div>
+            <div class="flex items-center justify-between">
+              <span class="flex items-center gap-2"><span class="badge badge-success">مكتمل</span></span>
+              <span class="font-bold" id="adminStatCompleted">0</span>
+            </div>
+            <div class="flex items-center justify-between">
+              <span class="flex items-center gap-2"><span class="badge badge-danger">ملغي</span></span>
+              <span class="font-bold" id="adminStatCancelled">0</span>
+            </div>
+          </div>
+        </div>
+        <div class="stat-card">
+          <h3 class="font-bold text-gray-800 mb-3">الإيرادات</h3>
+          <div class="text-center py-4">
+            <p class="text-3xl font-bold text-primary" id="adminStatRevenue">0 د.ع</p>
+            <p class="text-sm text-gray-400 mt-1">إجمالي إيرادات الحجوزات المكتملة</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Tabs -->
+      <div class="bg-white rounded-2xl shadow-sm overflow-hidden">
+        <div class="flex border-b border-gray-200 overflow-x-auto scrollbar-hide">
+          <button class="tab-btn active" data-tab="clinics" onclick="switchAdminTab('clinics')">🏥 العيادات</button>
+          <button class="tab-btn" data-tab="doctors" onclick="switchAdminTab('doctors')">👨‍⚕️ الأطباء</button>
+          <button class="tab-btn" data-tab="bookings" onclick="switchAdminTab('bookings')">📅 الحجوزات</button>
+          <button class="tab-btn" data-tab="specialties" onclick="switchAdminTab('specialties')">🩺 التخصصات</button>
+          <button class="tab-btn" data-tab="analytics" onclick="switchAdminTab('analytics')">📊 تحليلات</button>
+        </div>
+
+        <!-- Tab: Clinics -->
+        <div id="tab-clinics" class="tab-content p-4 md:p-6">
+          <div class="flex items-center justify-between mb-4">
+            <h3 class="text-lg font-bold text-gray-800">إدارة العيادات</h3>
+            <select id="clinicStatusFilter" onchange="renderAdminClinics()" class="form-input max-w-[180px]">
+              <option value="">كل الحالات</option>
+              <option value="approved">موافق عليها</option>
+              <option value="pending">بانتظار الموافقة</option>
+              <option value="rejected">مرفوضة</option>
+            </select>
+          </div>
+          <div id="adminClinicsList" class="space-y-3"></div>
+        </div>
+
+        <!-- Tab: Doctors -->
+        <div id="tab-doctors" class="tab-content p-4 md:p-6 hidden">
+          <h3 class="text-lg font-bold text-gray-800 mb-4">الأطباء المسجلون</h3>
+          <div id="adminDoctorsList" class="grid md:grid-cols-2 gap-4"></div>
+        </div>
+
+        <!-- Tab: Bookings -->
+        <div id="tab-bookings" class="tab-content p-4 md:p-6 hidden">
+          <h3 class="text-lg font-bold text-gray-800 mb-4">كل الحجوزات</h3>
+          <div id="adminBookingsList" class="space-y-3"></div>
+        </div>
+
+        <!-- Tab: Specialties -->
+        <div id="tab-specialties" class="tab-content p-4 md:p-6 hidden">
+          <h3 class="text-lg font-bold text-gray-800 mb-4">التخصصات والمدن</h3>
+          <div class="grid md:grid-cols-2 gap-6">
+            <div>
+              <h4 class="font-bold text-gray-700 mb-3">التخصصات الطبية</h4>
+              <div id="adminSpecialtiesList" class="space-y-2"></div>
+            </div>
+            <div>
+              <h4 class="font-bold text-gray-700 mb-3">المدن</h4>
+              <div id="adminCitiesList" class="space-y-2"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Tab: Analytics -->
+        <div id="tab-analytics" class="tab-content p-4 md:p-6 hidden">
+          <h3 class="text-lg font-bold text-gray-800 mb-4">تحليلات وإحصائيات</h3>
+          <div id="adminAnalytics" class="space-y-6"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast Container -->
+  <div id="toastContainer"></div>
+
+  <!-- Scripts -->
+  <script src="js/data.js"></script>
+  <script src="js/admin.js"></script>
+</body>
+</html>
