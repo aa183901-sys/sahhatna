@@ -1,30 +1,60 @@
 /* صحتنا - Sahatna Custom Styles */
 
 :root {
-  --primary: #0d9488;
-  --primary-dark: #0f766e;
-  --primary-light: #14b8a6;
-  --primary-lighter: #ccfbf1;
-  --secondary: #f59e0b;
-  --secondary-dark: #d97706;
-  --danger: #ef4444;
-  --danger-light: #fee2e2;
-  --success: #22c55e;
-  --success-light: #dcfce7;
-  --warning: #f59e0b;
-  --warning-light: #fef3c7;
-  --info: #3b82f6;
-  --info-light: #dbeafe;
+  /* ===== Color System (Unified) ===== */
+  /* Primary: Deep Teal Green */
+  --color-primary: #0d9488;
+  --color-primary-dark: #0f766e;
+  --color-primary-light: #14b8a6;
+  --color-primary-lighter: #ccfbf1;
+
+  /* Accent: Warm Gold (for CTAs, badges, highlights only) */
+  --color-accent: #f5b942;
+  --color-accent-dark: #e0a730;
+  --color-accent-light: #fef3d7;
+
+  /* Semantic Colors */
+  --color-danger: #ef4444;
+  --color-danger-light: #fee2e2;
+  --color-success: #22c55e;
+  --color-success-light: #dcfce7;
+  --color-warning: #f5b942;
+  --color-warning-light: #fef3d7;
+  --color-info: #3b82f6;
+  --color-info-light: #dbeafe;
+
+  /* Grays (adjusted for WCAG AA contrast) */
   --gray-50: #f9fafb;
   --gray-100: #f3f4f6;
   --gray-200: #e5e7eb;
   --gray-300: #d1d5db;
-  --gray-400: #9ca3af;
-  --gray-500: #6b7280;
+  --gray-400: #6b7280; /* Darker for better contrast */
+  --gray-500: #57606e; /* Darker for WCAG AA */
   --gray-600: #4b5563;
   --gray-700: #374151;
   --gray-800: #1f2937;
   --gray-900: #111827;
+
+  /* Backward-compatible aliases */
+  --primary: var(--color-primary);
+  --primary-dark: var(--color-primary-dark);
+  --primary-light: var(--color-primary-light);
+  --primary-lighter: var(--color-primary-lighter);
+  --secondary: var(--color-accent);
+  --secondary-dark: var(--color-accent-dark);
+  --danger: var(--color-danger);
+  --danger-light: var(--color-danger-light);
+  --success: var(--color-success);
+  --success-light: var(--color-success-light);
+  --warning: var(--color-warning);
+  --warning-light: var(--color-warning-light);
+  --info: var(--color-info);
+  --info-light: var(--color-info-light);
+
+  /* ===== Soft Shadows ===== */
+  --shadow-soft: 0 4px 24px rgba(15, 118, 110, 0.08), 0 1px 4px rgba(0, 0, 0, 0.04);
+  --shadow-soft-lg: 0 12px 40px rgba(15, 118, 110, 0.12), 0 2px 8px rgba(0, 0, 0, 0.06);
+  --shadow-float: 0 20px 60px rgba(15, 118, 110, 0.15), 0 4px 12px rgba(0, 0, 0, 0.08);
 }
 
 * {
@@ -422,9 +452,102 @@ html {
   border-radius: 8px;
 }
 
+/* ===== Hero Floating Cards (Soft, diffused shadow) ===== */
+.hero-float-card {
+  background: rgba(255, 255, 255, 0.97);
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.6);
+  border-radius: 20px;
+  box-shadow: var(--shadow-float);
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+.hero-float-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 24px 70px rgba(15, 118, 110, 0.2), 0 6px 16px rgba(0, 0, 0, 0.1);
+}
+
+/* ===== Hero Illustration Container ===== */
+.hero-illustration {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.hero-illustration-bg {
+  width: 320px;
+  height: 320px;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  backdrop-filter: blur(4px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+/* ===== Wave Divider (Hero → Search) ===== */
+.hero-wave {
+  display: block;
+  width: 100%;
+  height: 60px;
+  margin-top: -1px;
+  line-height: 0;
+}
+.hero-wave svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+/* ===== Accent Button (CTA) ===== */
+.btn-accent {
+  background: var(--color-accent);
+  color: var(--gray-900);
+  padding: 10px 24px;
+  border-radius: 10px;
+  font-weight: 700;
+  transition: all 0.2s ease;
+  border: none;
+  cursor: pointer;
+}
+.btn-accent:hover {
+  background: var(--color-accent-dark);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 16px rgba(245, 185, 66, 0.4);
+}
+.btn-accent:active {
+  transform: translateY(0);
+}
+
+/* ===== Badge Accent ===== */
+.badge-accent {
+  background: var(--color-accent-light);
+  color: #8a6d10;
+}
+
+/* ===== Hero Subtitle (lighter weight for hierarchy) ===== */
+.hero-subtitle {
+  font-weight: 400;
+  line-height: 1.7;
+}
+
+/* ===== Search Bar Card (soft shadow, larger radius) ===== */
+.search-bar-card {
+  border-radius: 24px;
+  box-shadow: var(--shadow-soft-lg);
+  border: 1px solid rgba(255, 255, 255, 0.8);
+}
+
 /* Responsive helpers */
 @media (max-width: 640px) {
   .hide-mobile { display: none; }
+  .hero-illustration-bg {
+    width: 240px;
+    height: 240px;
+  }
+  .hero-wave {
+    height: 40px;
+  }
 }
 @media (min-width: 641px) {
   .show-mobile-only { display: none; }

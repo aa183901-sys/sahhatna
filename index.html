@@ -85,17 +85,17 @@
     <div class="max-w-7xl mx-auto px-4 sm:px-6 py-12 md:py-20">
       <div class="grid md:grid-cols-2 gap-8 items-center">
         <div class="animate-slide-up">
-          <h2 class="text-3xl md:text-4xl font-bold mb-4 leading-tight">
+          <h2 class="text-3xl md:text-4xl font-extrabold mb-4 leading-tight">
             احجز موعدك مع أفضل الأطباء في العراق
           </h2>
-          <p class="text-lg text-teal-100 mb-6">
+          <p class="hero-subtitle text-lg text-teal-50 mb-6">
             منصة صحتنا تربطك بأطباء موثوقين في مختلف التخصصات. ابحث، اختر الوقت المناسب، واحجز فوراً — بدون انتظار.
           </p>
           <div class="flex flex-wrap gap-3">
-            <a href="#search" class="bg-white text-primary px-6 py-3 rounded-xl font-bold hover:bg-teal-50 transition shadow-lg">
+            <a href="#search" class="btn-accent inline-block">
               ابحث عن طبيب
             </a>
-            <a href="#how-it-works" class="border-2 border-white text-white px-6 py-3 rounded-xl font-bold hover:bg-white hover:text-primary transition">
+            <a href="#how-it-works" class="border-2 border-white/80 text-white px-6 py-3 rounded-xl font-bold hover:bg-white hover:text-primary transition">
               كيف يعمل؟
             </a>
           </div>
@@ -104,39 +104,57 @@
           <div class="grid grid-cols-3 gap-4 mt-8">
             <div class="text-center">
               <div class="text-2xl font-bold" id="statDoctors">-</div>
-              <div class="text-sm text-teal-200">طبيب متخصص</div>
+              <div class="text-sm text-teal-50">طبيب متخصص</div>
             </div>
             <div class="text-center">
               <div class="text-2xl font-bold" id="statClinics">-</div>
-              <div class="text-sm text-teal-200">عيادة ومركز</div>
+              <div class="text-sm text-teal-50">عيادة ومركز</div>
             </div>
             <div class="text-center">
               <div class="text-2xl font-bold" id="statSpecialties">-</div>
-              <div class="text-sm text-teal-200">تخصص طبي</div>
+              <div class="text-sm text-teal-50">تخصص طبي</div>
             </div>
           </div>
         </div>
 
         <!-- Hero illustration -->
-        <div class="hidden md:flex justify-center animate-scale-in">
+        <div class="hidden md:flex justify-center animate-scale-in hero-illustration">
           <div class="relative">
-            <div class="w-80 h-80 bg-white/10 rounded-full flex items-center justify-center backdrop-blur-sm">
-              <div class="text-9xl">🏥</div>
+            <div class="hero-illustration-bg">
+              <!-- Medical illustration: Doctor with stethoscope (SVG) -->
+              <svg width="180" height="180" viewBox="0 0 200 200" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <!-- Doctor circle background -->
+                <circle cx="100" cy="100" r="90" fill="rgba(255,255,255,0.06)"/>
+                <!-- Doctor head -->
+                <circle cx="100" cy="70" r="22" fill="white" fill-opacity="0.95"/>
+                <!-- Doctor body/coat -->
+                <path d="M70 105 Q70 95 100 95 Q130 95 130 105 L135 160 Q135 170 125 170 L75 170 Q65 170 65 160 Z" fill="white" fill-opacity="0.95"/>
+                <!-- Stethoscope -->
+                <path d="M85 120 Q85 140 95 145 Q100 148 105 145 Q115 140 115 120" stroke="#0d9488" stroke-width="3" fill="none" stroke-linecap="round"/>
+                <circle cx="100" cy="150" r="6" fill="#0d9488"/>
+                <!-- Cross medical symbol on coat -->
+                <rect x="93" y="115" width="14" height="5" rx="1" fill="#0d9488" fill-opacity="0.3"/>
+                <rect x="97" y="111" width="6" height="13" rx="1" fill="#0d9488" fill-opacity="0.3"/>
+                <!-- Heart pulse line -->
+                <path d="M55 100 L70 100 L75 90 L82 110 L88 100 L145 100" stroke="#f5b942" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round" opacity="0.8"/>
+              </svg>
             </div>
-            <div class="absolute -top-4 -right-4 bg-white rounded-2xl p-3 shadow-xl animate-pulse">
+            <!-- Floating card: instant booking -->
+            <div class="hero-float-card absolute -top-4 -right-4 p-3 animate-pulse">
               <div class="flex items-center gap-2">
                 <span class="text-2xl">📅</span>
                 <div>
-                  <div class="text-xs text-gray-500">حجز فوري</div>
+                  <div class="text-xs text-gray-600">حجز فوري</div>
                   <div class="text-sm font-bold text-gray-800">متاح 24/7</div>
                 </div>
               </div>
             </div>
-            <div class="absolute -bottom-4 -left-4 bg-white rounded-2xl p-3 shadow-xl">
+            <!-- Floating card: verified doctors -->
+            <div class="hero-float-card absolute -bottom-4 -left-4 p-3">
               <div class="flex items-center gap-2">
                 <span class="text-2xl">✅</span>
                 <div>
-                  <div class="text-xs text-gray-500">أطباء موثوقون</div>
+                  <div class="text-xs text-gray-600">أطباء موثوقون</div>
                   <div class="text-sm font-bold text-gray-800">موثّقون 100%</div>
                 </div>
               </div>
@@ -145,12 +163,18 @@
         </div>
       </div>
     </div>
+    <!-- Wave Divider -->
+    <div class="hero-wave">
+      <svg viewBox="0 0 1440 60" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M0,30 C240,60 480,0 720,20 C960,40 1200,55 1440,25 L1440,60 L0,60 Z" fill="#f0fdfa"/>
+      </svg>
+    </div>
   </section>
 
   <!-- ===== Search Section ===== -->
   <section id="search" class="max-w-7xl mx-auto px-4 sm:px-6 py-8">
     <!-- Search Bar -->
-    <div class="bg-white rounded-2xl shadow-lg p-4 md:p-6 -mt-12 relative z-10">
+    <div class="search-bar-card bg-white p-4 md:p-6 -mt-12 relative z-10">
       <div class="grid md:grid-cols-4 gap-3">
         <div class="md:col-span-2">
           <label class="block text-sm font-semibold text-gray-600 mb-1">اسم الطبيب أو التخصص</label>
