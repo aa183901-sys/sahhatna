@@ -152,7 +152,10 @@
           <button class="tab-btn" data-tab="calendar" onclick="switchTab('calendar')">🗓️ التقويم</button>
           <button class="tab-btn" data-tab="doctors" onclick="switchTab('doctors')">👨‍⚕️ الأطباء</button>
           <button class="tab-btn" data-tab="schedule" onclick="switchTab('schedule')">⏰ الدوام</button>
-          <button class="tab-btn" data-tab="reminders" onclick="switchTab('reminders')">📱 التذكيرات</button>
+          <button class="tab-btn" data-tab="reminders" onclick="switchTab('reminders')">
+            📱 التذكيرات
+            <span id="remindersBadge" class="reminders-count-badge hidden">0</span>
+          </button>
         </div>
 
         <!-- Tab: Bookings -->

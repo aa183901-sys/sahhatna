@@ -10,15 +10,27 @@
 
 const WhatsAppReminder = {
   /**
+   * Resolve the shared API (SahatnaAPI if loaded, otherwise SahatnaDB).
+   * clinic.html loads data.js (SahatnaDB) but not db.js (SahatnaAPI),
+   * so we fall back to SahatnaDB to avoid ReferenceError.
+   */
+  _api() {
+    if (typeof SahatnaAPI !== 'undefined' && SahatnaAPI) return SahatnaAPI;
+    if (typeof SahatnaDB !== 'undefined' && SahatnaDB) return SahatnaDB;
+    return null;
+  },
+
+  /**
    * Generate a reminder message for an appointment
    */
   generateMessage(reminder) {
-    const dayName = SahatnaAPI.getDayName
-      ? SahatnaAPI.getDayName(new Date(reminder.date + 'T00:00:00').getDay())
+    const api = this._api();
+    const dayName = api && api.getDayName
+      ? api.getDayName(new Date(reminder.date + 'T00:00:00').getDay())
       : '';
     const timeParts = reminder.time.split(':').map(Number);
-    const timeLabel = SahatnaAPI.formatTime
-      ? SahatnaAPI.formatTime(timeParts[0], timeParts[1])
+    const timeLabel = api && api.formatTime
+      ? api.formatTime(timeParts[0], timeParts[1])
       : reminder.time;
 
     return `🏥 *صحتنا - تذكير موعد طبي*
@@ -77,12 +89,13 @@ const WhatsAppReminder = {
    * Generate a booking confirmation message
    */
   generateConfirmationMessage(booking, doctor, clinic) {
-    const dayName = SahatnaAPI.getDayName
-      ? SahatnaAPI.getDayName(new Date(booking.date + 'T00:00:00').getDay())
+    const api = this._api();
+    const dayName = api && api.getDayName
+      ? api.getDayName(new Date(booking.date + 'T00:00:00').getDay())
       : '';
     const timeParts = booking.time.split(':').map(Number);
-    const timeLabel = SahatnaAPI.formatTime
-      ? SahatnaAPI.formatTime(timeParts[0], timeParts[1])
+    const timeLabel = api && api.formatTime
+      ? api.formatTime(timeParts[0], timeParts[1])
       : booking.time;
 
     return `🏥 *صحتنا - تأكيد حجز موعد*

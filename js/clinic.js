@@ -1,4 +1,4 @@
- /**
+/**
  * صحتنا - Clinic Dashboard Logic
  * Handles clinic login, bookings, calendar, doctors, schedule, and reminders.
  * All SahatnaDB calls are async (Supabase or localStorage).
@@ -112,6 +112,7 @@ async function showDashboard() {
   await renderClinicDoctors();
   await populateScheduleDoctorSelect();
   await renderReminders();
+  await updateRemindersBadge();
 }
 
 async function renderClinicStats() {
@@ -485,10 +486,24 @@ async function renderReminders() {
     return booking && doctorIds.includes(booking.doctorId);
   });
 
+  // Sort: unsent first, then today, then tomorrow, then by date/time
+  const today = new Date().toISOString().slice(0, 10);
+  const tomorrow = new Date(Date.now() + 86400000).toISOString().slice(0, 10);
+  reminders.sort((a, b) => {
+    if (a.sent !== b.sent) return a.sent ? 1 : -1;
+    const aRank = a.date === today ? 0 : a.date === tomorrow ? 1 : 2;
+    const bRank = b.date === today ? 0 : b.date === tomorrow ? 1 : 2;
+    if (aRank !== bRank) return aRank - bRank;
+    if (a.date !== b.date) return a.date < b.date ? -1 : 1;
+    if (a.time !== b.time) return a.time < b.time ? -1 : 1;
+    return 0;
+  });
+
   const list = document.getElementById('remindersList');
 
   if (reminders.length === 0) {
     list.innerHTML = `<div class="empty-state"><div class="empty-state-icon">📱</div><p class="text-gray-400">لا توجد تذكيرات حالياً</p></div>`;
+    await updateRemindersBadge();
     return;
   }
 
@@ -496,15 +511,20 @@ async function renderReminders() {
     .map((r) => {
       const dayName = SahatnaDB.getDayName(new Date(r.date + 'T00:00:00').getDay());
       const timeParts = r.time.split(':').map(Number);
+      const isToday = r.date === today;
+      const isTomorrow = r.date === tomorrow;
+      const dateLabel = isToday ? 'اليوم' : isTomorrow ? 'غداً' : dayName;
       return `
-        <div class="border border-gray-200 rounded-xl p-4 bg-white flex items-center justify-between">
+        <div class="border border-gray-200 rounded-xl p-4 bg-white flex items-center justify-between ${isToday ? 'border-r-4 border-r-primary' : ''}">
           <div>
             <div class="flex items-center gap-2 mb-1">
               <span class="font-bold text-gray-800">${r.patientName}</span>
               ${r.sent ? '<span class="badge badge-success">تم الإرسال</span>' : '<span class="badge badge-warning">بانتظار الإرسال</span>'}
+              ${isToday ? '<span class="badge badge-primary">اليوم</span>' : ''}
+              ${isTomorrow ? '<span class="badge badge-info">غداً</span>' : ''}
             </div>
             <p class="text-sm text-gray-500">📞 ${r.patientPhone}</p>
-            <p class="text-sm text-gray-500">📅 ${dayName} ${r.date} • ⏰ ${SahatnaDB.formatTime(timeParts[0], timeParts[1])}</p>
+            <p class="text-sm text-gray-500">📅 ${dateLabel} ${r.date} • ⏰ ${SahatnaDB.formatTime(timeParts[0], timeParts[1])}</p>
             <p class="text-xs text-gray-400 mt-1">👨‍⚕️ ${r.doctorName} - ${r.clinicName}</p>
           </div>
           ${!r.sent ? `<button onclick="sendReminder('${r.id}')" class="btn-primary text-sm">📤 إرسال</button>` : ''}
@@ -512,12 +532,23 @@ async function renderReminders() {
       `;
     })
     .join('');
+
+  await updateRemindersBadge();
 }
 
 async function sendReminder(reminderId) {
+  const db = await SahatnaDB.load();
+  const reminder = db.reminders.find((r) => r.id === reminderId);
+  if (!reminder) {
+    showToast('التذكير غير موجود', 'error');
+    return;
+  }
+  // Open WhatsApp with the pre-filled reminder message first
+  WhatsAppReminder.send(reminder);
+  // Mark as sent only after opening WhatsApp
   await SahatnaDB.markReminderSent(reminderId);
   await renderReminders();
-  showToast('تم إرسال التذكير بنجاح', 'success');
+  showToast('تم فتح واتساب لإرسال التذكير', 'success');
 }
 
 async function sendAllReminders() {
@@ -534,11 +565,37 @@ async function sendAllReminders() {
     return;
   }
 
-  for (const r of pending) {
-    await SahatnaDB.markReminderSent(r.id);
+  // Open WhatsApp for each reminder with a 2s delay between each
+  // to avoid the browser blocking multiple pop-ups. Mark as sent
+  // only after opening WhatsApp for that reminder.
+  pending.forEach((r, i) => {
+    setTimeout(async () => {
+      WhatsAppReminder.send(r);
+      await SahatnaDB.markReminderSent(r.id);
+      await renderReminders();
+    }, i * 2000);
+  });
+  showToast(`جارٍ فتح واتساب لإرسال ${pending.length} تذكير...`, 'info');
+}
+
+// Update the unsent-reminders counter badge on the Reminders tab
+async function updateRemindersBadge() {
+  const db = await SahatnaDB.load();
+  const doctorIds = db.doctors.filter((d) => d.clinicId === currentClinic.id).map((d) => d.id);
+  const unsentCount = db.reminders.filter((r) => {
+    if (r.sent) return false;
+    const booking = db.bookings.find((b) => b.id === r.bookingId);
+    return booking && doctorIds.includes(booking.doctorId);
+  }).length;
+
+  const badge = document.getElementById('remindersBadge');
+  if (!badge) return;
+  if (unsentCount > 0) {
+    badge.textContent = unsentCount;
+    badge.classList.remove('hidden');
+  } else {
+    badge.classList.add('hidden');
   }
-  await renderReminders();
-  showToast(`تم إرسال ${pending.length} تذكير بنجاح`, 'success');
 }
 
 // ---- Initialize ----------------------------------------------------------
