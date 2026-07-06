@@ -191,7 +191,69 @@
 
         <!-- Tab: Doctors -->
         <div id="tab-doctors" class="tab-content p-4 md:p-6 hidden">
-          <h3 class="text-lg font-bold text-gray-800 mb-4">أطباء العيادة</h3>
+          <div class="flex items-center justify-between mb-4">
+            <h3 class="text-lg font-bold text-gray-800">أطباء العيادة</h3>
+            <button onclick="showAddDoctorForm()" class="btn-primary text-sm">➕ إضافة طبيب</button>
+          </div>
+
+          <!-- Add Doctor Form (collapsible) -->
+          <div id="addDoctorForm" class="hidden bg-gray-50 rounded-2xl p-6 mb-6 border border-gray-200">
+            <h4 class="font-bold text-gray-800 mb-4">إضافة طبيب جديد</h4>
+            <form onsubmit="handleAddDoctor(event)" class="space-y-4">
+              <div class="grid md:grid-cols-2 gap-4">
+                <div>
+                  <label class="block text-sm font-semibold text-gray-600 mb-1">الاسم <span class="text-danger">*</span></label>
+                  <input type="text" id="newDoctorName" required placeholder="د. أحمد الكاظمي" class="form-input" />
+                </div>
+                <div>
+                  <label class="block text-sm font-semibold text-gray-600 mb-1">الاسم بالإنكليزي</label>
+                  <input type="text" id="newDoctorNameEn" placeholder="Dr. Ahmed Al-Kadhimi" class="form-input" />
+                </div>
+                <div>
+                  <label class="block text-sm font-semibold text-gray-600 mb-1">التخصص <span class="text-danger">*</span></label>
+                  <select id="newDoctorSpecialty" required class="form-input">
+                    <option value="">اختر التخصص...</option>
+                  </select>
+                </div>
+                <div>
+                  <label class="block text-sm font-semibold text-gray-600 mb-1">الجنس</label>
+                  <select id="newDoctorGender" class="form-input">
+                    <option value="male">ذكر</option>
+                    <option value="female">أنثى</option>
+                  </select>
+                </div>
+                <div>
+                  <label class="block text-sm font-semibold text-gray-600 mb-1">سنوات الخبرة</label>
+                  <input type="number" id="newDoctorExperience" min="0" max="60" value="0" class="form-input" />
+                </div>
+                <div>
+                  <label class="block text-sm font-semibold text-gray-600 mb-1">السعر بالدينار <span class="text-danger">*</span></label>
+                  <input type="number" id="newDoctorPrice" required min="0" step="1000" placeholder="30000" class="form-input" />
+                </div>
+              </div>
+              <div>
+                <label class="block text-sm font-semibold text-gray-600 mb-1">المؤهلات</label>
+                <input type="text" id="newDoctorQualifications" placeholder="بورد عراقي في الباطنية" class="form-input" />
+              </div>
+              <div>
+                <label class="block text-sm font-semibold text-gray-600 mb-1">نبذة</label>
+                <textarea id="newDoctorBio" rows="3" placeholder="استشاري باطنية مع خبرة 15 سنة..." class="form-input"></textarea>
+              </div>
+              <div>
+                <label class="block text-sm font-semibold text-gray-600 mb-2">أنواع الخدمة</label>
+                <div class="flex gap-4">
+                  <label class="flex items-center gap-2"><input type="checkbox" id="serviceClinic" checked class="w-4 h-4" /> <span>عيادة</span></label>
+                  <label class="flex items-center gap-2"><input type="checkbox" id="serviceVideo" class="w-4 h-4" /> <span>فيديو</span></label>
+                  <label class="flex items-center gap-2"><input type="checkbox" id="serviceHome" class="w-4 h-4" /> <span>منزلي</span></label>
+                </div>
+              </div>
+              <div class="flex gap-3">
+                <button type="submit" class="btn-primary">حفظ الطبيب</button>
+                <button type="button" onclick="hideAddDoctorForm()" class="btn-secondary">إلغاء</button>
+              </div>
+            </form>
+          </div>
+
           <div id="doctorsListClinic" class="grid md:grid-cols-2 gap-4"></div>
         </div>
 

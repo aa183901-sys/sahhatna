@@ -214,6 +214,10 @@ DROP POLICY IF EXISTS "Allow all admin_users" ON admin_users;
 DROP POLICY IF EXISTS "Allow all clinics manage" ON clinics;
 DROP POLICY IF EXISTS "Allow all doctors manage" ON doctors;
 DROP POLICY IF EXISTS "Allow all schedules manage" ON schedules;
+-- Drop old admin-only doctor policies (replaced by clinic-or-admin policies)
+DROP POLICY IF EXISTS "Admin manage doctors" ON doctors;
+DROP POLICY IF EXISTS "Admin update doctors" ON doctors;
+DROP POLICY IF EXISTS "Admin delete doctors" ON doctors;
 
 -- ---- specialties & cities (public read, admin write) ----
 CREATE POLICY "Public read specialties" ON specialties FOR SELECT USING (true);
@@ -235,9 +239,14 @@ CREATE POLICY "Admin delete clinics" ON clinics FOR DELETE USING (is_admin());
 -- ---- doctors ----
 -- Public can see all doctors (for search)
 CREATE POLICY "Public read doctors" ON doctors FOR SELECT USING (true);
--- Only admin can insert/update/delete doctors
-CREATE POLICY "Admin manage doctors" ON doctors FOR INSERT WITH CHECK (is_admin());
-CREATE POLICY "Admin update doctors" ON doctors FOR UPDATE USING (is_admin()) WITH CHECK (is_admin());
+-- Clinic can insert doctors for their own clinic; admin can insert any
+CREATE POLICY "Clinic or admin insert doctors" ON doctors FOR INSERT
+  WITH CHECK (is_admin() OR clinic_id = get_current_clinic_id());
+-- Clinic can update their own doctors; admin can update any
+CREATE POLICY "Clinic or admin update doctors" ON doctors FOR UPDATE
+  USING (is_admin() OR clinic_id = get_current_clinic_id())
+  WITH CHECK (is_admin() OR clinic_id = get_current_clinic_id());
+-- Only admin can delete doctors (protects related bookings data)
 CREATE POLICY "Admin delete doctors" ON doctors FOR DELETE USING (is_admin());
 
 -- ---- schedules ----

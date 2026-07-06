@@ -81,7 +81,6 @@ async function checkClinicSession() {
     try {
       const { userId, clinicId } = JSON.parse(saved);
       const db = await SahatnaDB.load();
-      // For localStorage mode, find user in clinicUsers
       const user = db.clinicUsers ? db.clinicUsers.find((u) => u.id === userId) : { id: userId, clinicId, name: 'مدير العيادة' };
       const clinic = db.clinics.find((c) => c.id === clinicId);
       if (user && clinic) {
@@ -374,6 +373,95 @@ async function renderClinicDoctors() {
   list.innerHTML = cards.join('');
 }
 
+// ---- Add Doctor (Self-service) ------------------------------------------
+function showAddDoctorForm() {
+  const form = document.getElementById('addDoctorForm');
+  form.classList.remove('hidden');
+  populateDoctorSpecialtySelect();
+  form.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function hideAddDoctorForm() {
+  document.getElementById('addDoctorForm').classList.add('hidden');
+}
+
+async function populateDoctorSpecialtySelect() {
+  const db = await SahatnaDB.load();
+  const select = document.getElementById('newDoctorSpecialty');
+  select.innerHTML = '<option value="">اختر التخصص...</option>';
+  db.specialties.forEach((s) => {
+    const opt = document.createElement('option');
+    opt.value = s.id;
+    opt.textContent = `${s.icon} ${s.name}`;
+    select.appendChild(opt);
+  });
+}
+
+async function handleAddDoctor(event) {
+  event.preventDefault();
+
+  const name = document.getElementById('newDoctorName').value.trim();
+  const nameEn = document.getElementById('newDoctorNameEn').value.trim();
+  const specialtyId = document.getElementById('newDoctorSpecialty').value;
+  const gender = document.getElementById('newDoctorGender').value;
+  const experienceYears = parseInt(document.getElementById('newDoctorExperience').value) || 0;
+  const qualifications = document.getElementById('newDoctorQualifications').value.trim();
+  const bio = document.getElementById('newDoctorBio').value.trim();
+  const price = parseInt(document.getElementById('newDoctorPrice').value);
+
+  // Validate required fields
+  if (!name) {
+    showToast('يرجى إدخال اسم الطبيب', 'error');
+    return;
+  }
+  if (!specialtyId) {
+    showToast('يرجى اختيار التخصص', 'error');
+    return;
+  }
+  if (!price || price <= 0) {
+    showToast('يرجى إدخال سعر صحيح', 'error');
+    return;
+  }
+
+  // Build services array from checkboxes
+  const services = [];
+  if (document.getElementById('serviceClinic').checked) services.push('clinic');
+  if (document.getElementById('serviceVideo').checked) services.push('video');
+  if (document.getElementById('serviceHome').checked) services.push('home');
+  if (services.length === 0) services.push('clinic');
+
+  // Generate avatar URL based on name (same pattern as existing doctors)
+  const avatarName = encodeURIComponent(nameEn || name);
+  const bgColor = gender === 'female' ? 'db2777' : '0d9488';
+  const photo = `https://ui-avatars.com/api/?name=${avatarName}&background=${bgColor}&color=fff&size=200`;
+
+  const doctorData = {
+    name,
+    nameEn: nameEn || undefined,
+    specialtyId,
+    clinicId: currentClinic.id,
+    photo,
+    bio,
+    qualifications,
+    experienceYears,
+    price,
+    gender,
+    languages: ['العربية'],
+    services,
+  };
+
+  try {
+    await SahatnaDB.addDoctor(doctorData);
+    showToast('تمت إضافة الطبيب بنجاح', 'success');
+    hideAddDoctorForm();
+    await renderClinicDoctors();
+    await populateScheduleDoctorSelect();
+    await renderClinicStats();
+  } catch (e) {
+    showToast('حدث خطأ أثناء إضافة الطبيب: ' + e.message, 'error');
+  }
+}
+
 // ---- Schedule Management -------------------------------------------------
 async function populateScheduleDoctorSelect() {
   const db = await SahatnaDB.load();
@@ -486,7 +574,6 @@ async function renderReminders() {
     return booking && doctorIds.includes(booking.doctorId);
   });
 
-  // Sort: unsent first, then today, then tomorrow, then by date/time
   const today = new Date().toISOString().slice(0, 10);
   const tomorrow = new Date(Date.now() + 86400000).toISOString().slice(0, 10);
   reminders.sort((a, b) => {
@@ -543,9 +630,7 @@ async function sendReminder(reminderId) {
     showToast('التذكير غير موجود', 'error');
     return;
   }
-  // Open WhatsApp with the pre-filled reminder message first
   WhatsAppReminder.send(reminder);
-  // Mark as sent only after opening WhatsApp
   await SahatnaDB.markReminderSent(reminderId);
   await renderReminders();
   showToast('تم فتح واتساب لإرسال التذكير', 'success');
@@ -565,9 +650,6 @@ async function sendAllReminders() {
     return;
   }
 
-  // Open WhatsApp for each reminder with a 2s delay between each
-  // to avoid the browser blocking multiple pop-ups. Mark as sent
-  // only after opening WhatsApp for that reminder.
   pending.forEach((r, i) => {
     setTimeout(async () => {
       WhatsAppReminder.send(r);
@@ -578,7 +660,6 @@ async function sendAllReminders() {
   showToast(`جارٍ فتح واتساب لإرسال ${pending.length} تذكير...`, 'info');
 }
 
-// Update the unsent-reminders counter badge on the Reminders tab
 async function updateRemindersBadge() {
   const db = await SahatnaDB.load();
   const doctorIds = db.doctors.filter((d) => d.clinicId === currentClinic.id).map((d) => d.id);
