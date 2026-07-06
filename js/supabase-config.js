@@ -5,13 +5,17 @@
  * 2. انسخ URL و anon key من Settings > API
  * 3. استبدل القيم أدناه
  * 4. شغّل supabase-schema.sql في SQL Editor
+ *
+ * ملاحظة: حالياً enabled = false لاستخدام localStorage (الوضع التجريبي)
+ * مع الحسابات التجريبية (cl1/1234, cl2/1234, cl3/1234, admin/admin123).
+ * لتفعيل Supabase، ضع enabled = true بعد التأكد من إنشاء مستخدمي auth.users.
  */
 
 const SUPABASE_CONFIG = {
   url: 'https://cjlykvcrzzlnjannjlgq.supabase.co',
   anonKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNqbHlrdmNyenpsbmphbm5qbGdxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODMzMzY1MzEsImV4cCI6MjA5ODkxMjUzMX0.FyQJBRwTyBbjt2RCUQInV3kicFGZfAosMaig70lfGkA',
   // ضع true بعد إعداد Supabase لتفعيل قاعدة البيانات الفعلية
-  enabled: true,
+  enabled: false,
 };
 
 // Load Supabase JS SDK dynamically if enabled
