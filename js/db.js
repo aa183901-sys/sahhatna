@@ -28,6 +28,13 @@ const SahatnaAPI = (async function () {
     return ['يناير', 'فبراير', 'مارس', 'أبريل', 'مايو', 'يونيو', 'يوليو', 'أغسطس', 'سبتمبر', 'أكتوبر', 'نوفمبر', 'ديسمبر'][month];
   }
 
+  function generateActivationCode() {
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+    let code = '';
+    for (let i = 0; i < 6; i++) code += chars.charAt(Math.floor(Math.random() * chars.length));
+    return code;
+  }
+
   // ---- Supabase Implementation ------------------------------------------
   const SupabaseImpl = {
     async getSpecialties() {
@@ -129,8 +136,25 @@ const SahatnaAPI = (async function () {
       }
     },
     async approveClinic(id) {
-      const { data } = await sb.from('clinics').update({ status: 'approved' }).eq('id', id).select().single();
+      const code = generateActivationCode();
+      const { data } = await sb.from('clinics').update({ status: 'approved', activation_code: code }).eq('id', id).select().single();
+      if (data) data.activationCode = code;
       return data;
+    },
+    async activateClinic(clinicName, activationCode, username, password) {
+      const { data: clinic, error: clinicError } = await sb.from('clinics')
+        .select('*').eq('activation_code', activationCode).eq('status', 'approved').single();
+      if (clinicError || !clinic) throw new Error('رمز التفعيل غير صحيح أو العيادة غير موافق عليها');
+      if (clinic.name !== clinicName) throw new Error('اسم العيادة لا يطابق السجل');
+      const email = `${username}@sahatna.app`;
+      const { data: authData, error: authError } = await sb.auth.signUp({ email, password });
+      if (authError || !authData.user) throw new Error('فشل إنشاء الحساب: ' + (authError ? authError.message : 'خطأ غير معروف'));
+      const { error: linkError } = await sb.from('clinic_users').insert({
+        clinic_id: clinic.id, user_id: authData.user.id, username: username, name: clinic.name + ' - مدير',
+      });
+      if (linkError) throw new Error('فشل ربط الحساب بالعيادة: ' + linkError.message);
+      await sb.from('clinics').update({ activation_code: null }).eq('id', clinic.id);
+      return { success: true, clinic };
     },
     async rejectClinic(id) {
       const { data } = await sb.from('clinics').update({ status: 'rejected' }).eq('id', id).select().single();
@@ -285,6 +309,7 @@ const SahatnaAPI = (async function () {
     updateAppointmentStatus: (id, status) => SahatnaDB.updateBookingStatus(id, status),
     updateSchedule: (doctorId, slots, dur) => SahatnaDB.updateSchedule(doctorId, slots, dur),
     approveClinic: (id) => SahatnaDB.approveClinic(id),
+    activateClinic: (clinicName, activationCode, username, password) => SahatnaDB.activateClinic(clinicName, activationCode, username, password),
     rejectClinic: (id) => SahatnaDB.rejectClinic(id),
     addClinic: (data) => SahatnaDB.addClinic(data),
     clinicLogin: (u, p) => SahatnaDB.clinicLogin(u, p),

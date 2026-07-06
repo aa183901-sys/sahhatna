@@ -4,42 +4,26 @@
  * All SahatnaDB calls are async (Supabase or localStorage).
  */
 
-// ---- State ---------------------------------------------------------------
 let currentAdmin = null;
 
-// ---- Utilities -----------------------------------------------------------
 function showToast(message, type = 'success') {
   const container = document.getElementById('toastContainer');
   const toast = document.createElement('div');
   toast.className = `toast toast-${type}`;
   toast.textContent = message;
   container.appendChild(toast);
-  setTimeout(() => {
-    toast.style.opacity = '0';
-    toast.style.transition = 'opacity 0.3s';
-    setTimeout(() => toast.remove(), 300);
-  }, 3000);
+  setTimeout(() => { toast.style.opacity = '0'; toast.style.transition = 'opacity 0.3s'; setTimeout(() => toast.remove(), 300); }, 3000);
 }
 
-function formatPrice(price) {
-  return new Intl.NumberFormat('ar-IQ').format(price) + ' د.ع';
-}
+function formatPrice(price) { return new Intl.NumberFormat('ar-IQ').format(price) + ' د.ع'; }
 
 function getClinicStatusBadge(status) {
-  const badges = {
-    approved: '<span class="badge badge-success">موافق عليها</span>',
-    pending: '<span class="badge badge-warning">بانتظار الموافقة</span>',
-    rejected: '<span class="badge badge-danger">مرفوضة</span>',
-  };
+  const badges = { approved: '<span class="badge badge-success">موافق عليها</span>', pending: '<span class="badge badge-warning">بانتظار الموافقة</span>', rejected: '<span class="badge badge-danger">مرفوضة</span>' };
   return badges[status] || badges.pending;
 }
 
 function getBookingStatusBadge(status) {
-  const badges = {
-    confirmed: '<span class="badge badge-info">مؤكد</span>',
-    completed: '<span class="badge badge-success">مكتمل</span>',
-    cancelled: '<span class="badge badge-danger">ملغي</span>',
-  };
+  const badges = { confirmed: '<span class="badge badge-info">مؤكد</span>', completed: '<span class="badge badge-success">مكتمل</span>', cancelled: '<span class="badge badge-danger">ملغي</span>' };
   return badges[status] || badges.confirmed;
 }
 
@@ -48,12 +32,10 @@ function getServiceLabel(service) {
   return labels[service] || service;
 }
 
-// ---- Auth ----------------------------------------------------------------
 async function handleAdminLogin(event) {
   event.preventDefault();
   const username = document.getElementById('adminUsername').value.trim();
   const password = document.getElementById('adminPassword').value.trim();
-
   const admin = await SahatnaDB.adminLogin(username, password);
   if (admin) {
     currentAdmin = admin;
@@ -81,17 +63,11 @@ async function checkAdminSession() {
       const { username } = JSON.parse(saved);
       const db = await SahatnaDB.load();
       const admin = db.adminUsers ? db.adminUsers.find((a) => a.username === username) : { username, name: 'مدير صحتنا' };
-      if (admin) {
-        currentAdmin = admin;
-        showAdminDashboard();
-      }
-    } catch (e) {
-      sessionStorage.removeItem('sahatna_admin');
-    }
+      if (admin) { currentAdmin = admin; showAdminDashboard(); }
+    } catch (e) { sessionStorage.removeItem('sahatna_admin'); }
   }
 }
 
-// ---- Dashboard -----------------------------------------------------------
 async function showAdminDashboard() {
   document.getElementById('adminLoginScreen').classList.add('hidden');
   document.getElementById('adminDashboard').classList.remove('hidden');
@@ -118,38 +94,27 @@ async function renderAdminStats() {
   document.getElementById('adminStatRevenue').textContent = formatPrice(stats.totalRevenue);
 }
 
-// ---- Tabs ----------------------------------------------------------------
 function switchAdminTab(tabName) {
   document.querySelectorAll('.tab-content').forEach((t) => t.classList.add('hidden'));
   document.querySelectorAll('.tab-btn').forEach((b) => b.classList.remove('active'));
-
   document.getElementById('tab-' + tabName).classList.remove('hidden');
   document.querySelector(`[data-tab="${tabName}"]`).classList.add('active');
-
   if (tabName === 'analytics') renderAdminAnalytics();
 }
 
-// ---- Clinics Management --------------------------------------------------
 async function renderAdminClinics() {
   const db = await SahatnaDB.load();
   const statusFilter = document.getElementById('clinicStatusFilter').value;
   let clinics = db.clinics;
   if (statusFilter) clinics = clinics.filter((c) => c.status === statusFilter);
-
   const list = document.getElementById('adminClinicsList');
-
-  if (clinics.length === 0) {
-    list.innerHTML = `<div class="empty-state"><div class="empty-state-icon">🏥</div><p class="text-gray-400">لا توجد عيادات</p></div>`;
-    return;
-  }
-
+  if (clinics.length === 0) { list.innerHTML = `<div class="empty-state"><div class="empty-state-icon">🏥</div><p class="text-gray-400">لا توجد عيادات</p></div>`; return; }
   const cards = [];
   for (const clinic of clinics) {
     const city = db.cities.find((c) => c.id === clinic.cityId);
     const doctors = db.doctors.filter((d) => d.clinicId === clinic.id);
     const bookings = await SahatnaDB.getBookingsByClinic(clinic.id);
     const created = new Date(clinic.createdAt).toLocaleDateString('ar-IQ');
-
     cards.push(`
       <div class="border border-gray-200 rounded-2xl p-4 bg-white animate-fade-in">
         <div class="flex items-start justify-between gap-3 flex-wrap">
@@ -182,10 +147,12 @@ async function renderAdminClinics() {
 }
 
 async function approveClinic(clinicId) {
-  await SahatnaDB.approveClinic(clinicId);
+  const clinic = await SahatnaDB.approveClinic(clinicId);
   await renderAdminClinics();
   await renderAdminStats();
-  showToast('تمت الموافقة على العيادة بنجاح', 'success');
+  const code = clinic.activationCode || clinic.activation_code;
+  showToast(`تمت الموافقة على العيادة. كود التفعيل: ${code}`, 'success');
+  alert(`تمت الموافقة على العيادة بنجاح!\n\nكود التفعيل: ${code}\n\nانسخ هذا الكود وأعطه للعيادة لتفعيل حسابها.`);
 }
 
 async function rejectClinic(clinicId) {
@@ -197,16 +164,10 @@ async function rejectClinic(clinicId) {
   }
 }
 
-// ---- Doctors -------------------------------------------------------------
 async function renderAdminDoctors() {
   const db = await SahatnaDB.load();
   const list = document.getElementById('adminDoctorsList');
-
-  if (db.doctors.length === 0) {
-    list.innerHTML = `<div class="col-span-full empty-state"><div class="empty-state-icon">👨‍⚕️</div><p class="text-gray-400">لا يوجد أطباء مسجلون</p></div>`;
-    return;
-  }
-
+  if (db.doctors.length === 0) { list.innerHTML = `<div class="col-span-full empty-state"><div class="empty-state-icon">👨‍⚕️</div><p class="text-gray-400">لا يوجد أطباء مسجلون</p></div>`; return; }
   const cards = [];
   for (const d of db.doctors) {
     const specialty = db.specialties.find((s) => s.id === d.specialtyId);
@@ -214,7 +175,6 @@ async function renderAdminDoctors() {
     const city = clinic ? db.cities.find((c) => c.id === clinic.cityId) : null;
     const bookings = await SahatnaDB.getBookingsByDoctor(d.id);
     const revenue = bookings.filter((b) => b.status === 'completed').reduce((sum, b) => sum + b.price, 0);
-
     cards.push(`
       <div class="border border-gray-200 rounded-2xl p-4 bg-white">
         <div class="flex gap-3">
@@ -241,98 +201,59 @@ async function renderAdminDoctors() {
   list.innerHTML = cards.join('');
 }
 
-// ---- Bookings ------------------------------------------------------------
 async function renderAdminBookings() {
   const db = await SahatnaDB.load();
   const list = document.getElementById('adminBookingsList');
-
-  if (db.bookings.length === 0) {
-    list.innerHTML = `<div class="empty-state"><div class="empty-state-icon">📅</div><p class="text-gray-400">لا توجد حجوزات بعد</p></div>`;
-    return;
-  }
-
+  if (db.bookings.length === 0) { list.innerHTML = `<div class="empty-state"><div class="empty-state-icon">📅</div><p class="text-gray-400">لا توجد حجوزات بعد</p></div>`; return; }
   const bookings = [...db.bookings].sort((a, b) => (b.date + b.time > a.date + a.time ? 1 : -1));
-
-  list.innerHTML = bookings
-    .map((b) => {
-      const doctor = db.doctors.find((d) => d.id === b.doctorId);
-      const clinic = db.clinics.find((c) => c.id === b.clinicId);
-      const specialty = doctor ? db.specialties.find((s) => s.id === doctor.specialtyId) : null;
-      const dayName = SahatnaDB.getDayName(new Date(b.date + 'T00:00:00').getDay());
-      const timeParts = b.time.split(':').map(Number);
-
-      return `
-        <div class="booking-item status-${b.status}">
-          <div class="flex items-start justify-between gap-3 flex-wrap">
-            <div class="flex-1 min-w-0">
-              <div class="flex items-center gap-2 mb-1">
-                <span class="font-bold text-gray-800">${b.patientName}</span>
-                ${getBookingStatusBadge(b.status)}
-              </div>
-              <div class="text-sm text-gray-500 space-y-1">
-                <p>👨‍⚕️ ${doctor ? doctor.name : ''} - ${specialty ? specialty.name : ''}</p>
-                <p>🏥 ${clinic ? clinic.name : ''}</p>
-                <p>📅 ${dayName} ${b.date} • ⏰ ${SahatnaDB.formatTime(timeParts[0], timeParts[1])}</p>
-                <p>📞 ${b.patientPhone} • 💰 ${formatPrice(b.price)}</p>
-              </div>
+  list.innerHTML = bookings.map((b) => {
+    const doctor = db.doctors.find((d) => d.id === b.doctorId);
+    const clinic = db.clinics.find((c) => c.id === b.clinicId);
+    const specialty = doctor ? db.specialties.find((s) => s.id === doctor.specialtyId) : null;
+    const dayName = SahatnaDB.getDayName(new Date(b.date + 'T00:00:00').getDay());
+    const timeParts = b.time.split(':').map(Number);
+    return `
+      <div class="booking-item status-${b.status}">
+        <div class="flex items-start justify-between gap-3 flex-wrap">
+          <div class="flex-1 min-w-0">
+            <div class="flex items-center gap-2 mb-1">
+              <span class="font-bold text-gray-800">${b.patientName}</span>
+              ${getBookingStatusBadge(b.status)}
+            </div>
+            <div class="text-sm text-gray-500 space-y-1">
+              <p>👨‍⚕️ ${doctor ? doctor.name : ''} - ${specialty ? specialty.name : ''}</p>
+              <p>🏥 ${clinic ? clinic.name : ''}</p>
+              <p>📅 ${dayName} ${b.date} • ⏰ ${SahatnaDB.formatTime(timeParts[0], timeParts[1])}</p>
+              <p>📞 ${b.patientPhone} • 💰 ${formatPrice(b.price)}</p>
             </div>
           </div>
         </div>
-      `;
-    })
-    .join('');
+      </div>
+    `;
+  }).join('');
 }
 
-// ---- Specialties & Cities ------------------------------------------------
 async function renderAdminSpecialties() {
   const db = await SahatnaDB.load();
   const list = document.getElementById('adminSpecialtiesList');
-
-  list.innerHTML = db.specialties
-    .map((sp) => {
-      const count = db.doctors.filter((d) => d.specialtyId === sp.id).length;
-      return `
-        <div class="flex items-center justify-between bg-gray-50 rounded-lg p-3 border border-gray-200">
-          <div class="flex items-center gap-3">
-            <span class="text-2xl">${sp.icon}</span>
-            <div>
-              <p class="font-semibold text-gray-700">${sp.name}</p>
-              <p class="text-xs text-gray-400">${sp.nameEn}</p>
-            </div>
-          </div>
-          <span class="badge badge-primary">${count} طبيب</span>
-        </div>
-      `;
-    })
-    .join('');
+  list.innerHTML = db.specialties.map((sp) => {
+    const count = db.doctors.filter((d) => d.specialtyId === sp.id).length;
+    return `<div class="flex items-center justify-between bg-gray-50 rounded-lg p-3 border border-gray-200"><div class="flex items-center gap-3"><span class="text-2xl">${sp.icon}</span><div><p class="font-semibold text-gray-700">${sp.name}</p><p class="text-xs text-gray-400">${sp.nameEn}</p></div></div><span class="badge badge-primary">${count} طبيب</span></div>`;
+  }).join('');
 }
 
 async function renderAdminCities() {
   const db = await SahatnaDB.load();
   const list = document.getElementById('adminCitiesList');
-
-  list.innerHTML = db.cities
-    .map((city) => {
-      const clinics = db.clinics.filter((c) => c.cityId === city.id && c.status === 'approved').length;
-      return `
-        <div class="flex items-center justify-between bg-gray-50 rounded-lg p-3 border border-gray-200">
-          <div class="flex items-center gap-3">
-            <span class="text-2xl">📍</span>
-            <p class="font-semibold text-gray-700">${city.name}</p>
-          </div>
-          <span class="badge badge-primary">${clinics} عيادة</span>
-        </div>
-      `;
-    })
-    .join('');
+  list.innerHTML = db.cities.map((city) => {
+    const clinics = db.clinics.filter((c) => c.cityId === city.id && c.status === 'approved').length;
+    return `<div class="flex items-center justify-between bg-gray-50 rounded-lg p-3 border border-gray-200"><div class="flex items-center gap-3"><span class="text-2xl">📍</span><p class="font-semibold text-gray-700">${city.name}</p></div><span class="badge badge-primary">${clinics} عيادة</span></div>`;
+  }).join('');
 }
 
-// ---- Analytics -----------------------------------------------------------
 async function renderAdminAnalytics() {
   const db = await SahatnaDB.load();
   const container = document.getElementById('adminAnalytics');
-
-  // Top specialties by bookings
   const specialtyStats = [];
   for (const sp of db.specialties) {
     const doctorIds = db.doctors.filter((d) => d.specialtyId === sp.id).map((d) => d.id);
@@ -340,8 +261,6 @@ async function renderAdminAnalytics() {
     specialtyStats.push({ ...sp, bookings });
   }
   specialtyStats.sort((a, b) => b.bookings - a.bookings);
-
-  // Top doctors by bookings
   const doctorStats = [];
   for (const d of db.doctors) {
     const bookings = await SahatnaDB.getBookingsByDoctor(d.id);
@@ -350,8 +269,6 @@ async function renderAdminAnalytics() {
     doctorStats.push({ ...d, totalBookings: bookings.length, completed, revenue });
   }
   doctorStats.sort((a, b) => b.totalBookings - a.totalBookings);
-
-  // Top clinics by bookings
   const clinicStats = [];
   for (const c of db.clinics.filter((c) => c.status === 'approved')) {
     const bookings = await SahatnaDB.getBookingsByClinic(c.id);
@@ -359,77 +276,28 @@ async function renderAdminAnalytics() {
     clinicStats.push({ ...c, totalBookings: bookings.length, revenue });
   }
   clinicStats.sort((a, b) => b.totalBookings - a.totalBookings);
-
   const maxSpBookings = Math.max(...specialtyStats.map((s) => s.bookings), 1);
   const maxDocBookings = Math.max(...doctorStats.map((d) => d.totalBookings), 1);
   const maxClinicBookings = Math.max(...clinicStats.map((c) => c.totalBookings), 1);
-
   container.innerHTML = `
-    <!-- Top Specialties -->
     <div class="stat-card">
       <h4 class="font-bold text-gray-800 mb-4">أكثر التخصصات طلباً</h4>
       <div class="space-y-3">
-        ${specialtyStats.slice(0, 5).map((sp) => {
-          const pct = (sp.bookings / maxSpBookings) * 100;
-          return `
-            <div>
-              <div class="flex items-center justify-between mb-1">
-                <span class="text-sm font-semibold">${sp.icon} ${sp.name}</span>
-                <span class="text-sm text-gray-500">${sp.bookings} حجز</span>
-              </div>
-              <div class="w-full bg-gray-100 rounded-full h-2">
-                <div class="bg-primary h-2 rounded-full transition-all" style="width: ${pct}%"></div>
-              </div>
-            </div>
-          `;
-        }).join('')}
+        ${specialtyStats.slice(0, 5).map((sp) => { const pct = (sp.bookings / maxSpBookings) * 100; return `<div><div class="flex items-center justify-between mb-1"><span class="text-sm font-semibold">${sp.icon} ${sp.name}</span><span class="text-sm text-gray-500">${sp.bookings} حجز</span></div><div class="w-full bg-gray-100 rounded-full h-2"><div class="bg-primary h-2 rounded-full transition-all" style="width: ${pct}%"></div></div></div>`; }).join('')}
       </div>
     </div>
-
-    <!-- Top Doctors -->
     <div class="stat-card">
       <h4 class="font-bold text-gray-800 mb-4">أكثر الأطباء حجوزاً</h4>
       <div class="space-y-3">
-        ${doctorStats.slice(0, 5).map((d) => {
-          const pct = (d.totalBookings / maxDocBookings) * 100;
-          return `
-            <div>
-              <div class="flex items-center justify-between mb-1">
-                <span class="text-sm font-semibold">👨‍⚕️ ${d.name}</span>
-                <span class="text-sm text-gray-500">${d.totalBookings} حجز • ${formatPrice(d.revenue)}</span>
-              </div>
-              <div class="w-full bg-gray-100 rounded-full h-2">
-                <div class="bg-success h-2 rounded-full transition-all" style="width: ${pct}%"></div>
-              </div>
-            </div>
-          `;
-        }).join('')}
+        ${doctorStats.slice(0, 5).map((d) => { const pct = (d.totalBookings / maxDocBookings) * 100; return `<div><div class="flex items-center justify-between mb-1"><span class="text-sm font-semibold">👨‍⚕️ ${d.name}</span><span class="text-sm text-gray-500">${d.totalBookings} حجز • ${formatPrice(d.revenue)}</span></div><div class="w-full bg-gray-100 rounded-full h-2"><div class="bg-success h-2 rounded-full transition-all" style="width: ${pct}%"></div></div></div>`; }).join('')}
       </div>
     </div>
-
-    <!-- Top Clinics -->
     <div class="stat-card">
       <h4 class="font-bold text-gray-800 mb-4">أكثر العيادات نشاطاً</h4>
       <div class="space-y-3">
-        ${clinicStats.slice(0, 5).map((c) => {
-          const pct = (c.totalBookings / maxClinicBookings) * 100;
-          const city = db.cities.find((ci) => ci.id === c.cityId);
-          return `
-            <div>
-              <div class="flex items-center justify-between mb-1">
-                <span class="text-sm font-semibold">🏥 ${c.name} - ${city ? city.name : ''}</span>
-                <span class="text-sm text-gray-500">${c.totalBookings} حجز • ${formatPrice(c.revenue)}</span>
-              </div>
-              <div class="w-full bg-gray-100 rounded-full h-2">
-                <div class="bg-info h-2 rounded-full transition-all" style="width: ${pct}%"></div>
-              </div>
-            </div>
-          `;
-        }).join('')}
+        ${clinicStats.slice(0, 5).map((c) => { const pct = (c.totalBookings / maxClinicBookings) * 100; const city = db.cities.find((ci) => ci.id === c.cityId); return `<div><div class="flex items-center justify-between mb-1"><span class="text-sm font-semibold">🏥 ${c.name} - ${city ? city.name : ''}</span><span class="text-sm text-gray-500">${c.totalBookings} حجز • ${formatPrice(c.revenue)}</span></div><div class="w-full bg-gray-100 rounded-full h-2"><div class="bg-info h-2 rounded-full transition-all" style="width: ${pct}%"></div></div></div>`; }).join('')}
       </div>
     </div>
-
-    <!-- Summary -->
     <div class="stat-card">
       <h4 class="font-bold text-gray-800 mb-4">ملخص الأداء</h4>
       <div class="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
@@ -442,5 +310,4 @@ async function renderAdminAnalytics() {
   `;
 }
 
-// ---- Initialize ----------------------------------------------------------
 document.addEventListener('DOMContentLoaded', checkAdminSession);

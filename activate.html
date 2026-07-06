@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>صحتنا - تفعيل حساب العيادة</title>
+
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            primary: { DEFAULT: '#0d9488', dark: '#0f766e', light: '#14b8a6', lighter: '#ccfbf1' },
+          },
+          fontFamily: { sans: ['Cairo', 'Tajawal', 'system-ui', 'sans-serif'] },
+        },
+      },
+    };
+  </script>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+
+  <link rel="stylesheet" href="css/styles.css" />
+
+  <link rel="manifest" href="manifest.json" />
+  <meta name="theme-color" content="#0d9488" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-title" content="صحتنا" />
+</head>
+<body class="bg-gray-50 min-h-screen">
+
+  <div class="min-h-screen flex items-center justify-center p-4">
+    <div class="bg-white rounded-2xl shadow-xl p-8 max-w-md w-full">
+      <div class="text-center mb-6">
+        <div class="w-16 h-16 bg-primary rounded-2xl flex items-center justify-center text-white text-3xl font-bold mx-auto mb-3">+</div>
+        <h1 class="text-2xl font-bold text-gray-800">تفعيل حساب العيادة</h1>
+        <p class="text-gray-500 mt-1">أدخل رمز التفعيل الذي حصلت عليه من الإدارة</p>
+      </div>
+
+      <form onsubmit="handleActivate(event)" class="space-y-4">
+        <div>
+          <label class="block text-sm font-semibold text-gray-600 mb-1">اسم العيادة <span class="text-danger">*</span></label>
+          <input type="text" id="activateClinicName" required placeholder="مثال: مركز الشفاء الطبي" class="form-input" />
+          <p class="text-xs text-gray-400 mt-1">يجب أن يطابق الاسم المسجل لدى الإدارة</p>
+        </div>
+        <div>
+          <label class="block text-sm font-semibold text-gray-600 mb-1">رمز التفعيل <span class="text-danger">*</span></label>
+          <input type="text" id="activateCode" required placeholder="ABC123" maxlength="6" class="form-input text-center text-2xl tracking-widest font-bold uppercase" style="letter-spacing: 0.3em;" />
+          <p class="text-xs text-gray-400 mt-1">6 محارف (أحرف كبيرة + أرقام)</p>
+        </div>
+        <div>
+          <label class="block text-sm font-semibold text-gray-600 mb-1">اسم المستخدم <span class="text-danger">*</span></label>
+          <input type="text" id="activateUsername" required placeholder="مثال: myclinic" class="form-input" />
+          <p class="text-xs text-gray-400 mt-1">ستستخدمه لتسجيل الدخول</p>
+        </div>
+        <div>
+          <label class="block text-sm font-semibold text-gray-600 mb-1">كلمة المرور <span class="text-danger">*</span></label>
+          <input type="password" id="activatePassword" required minlength="6" placeholder="••••••" class="form-input" />
+        </div>
+        <div>
+          <label class="block text-sm font-semibold text-gray-600 mb-1">تأكيد كلمة المرور <span class="text-danger">*</span></label>
+          <input type="password" id="activatePasswordConfirm" required minlength="6" placeholder="••••••" class="form-input" />
+        </div>
+        <button type="submit" id="activateBtn" class="btn-primary w-full">تفعيل الحساب</button>
+      </form>
+
+      <div class="mt-6 bg-info-light rounded-xl p-4 text-sm">
+        <p class="font-semibold text-info mb-1">ℹ️ كيف أحصل على رمز التفعيل؟</p>
+        <p class="text-gray-600">بعد تسجيل عيادتك وموافقة الإدارة، يصلك رمز التفعيل. استخدمه هنا لإنشاء حساب الدخول.</p>
+      </div>
+
+      <div class="mt-4 text-center">
+        <a href="clinic.html" class="text-sm text-gray-400 hover:text-primary">← العودة لتسجيل الدخول</a>
+      </div>
+    </div>
+  </div>
+
+  <div id="toastContainer"></div>
+
+  <script src="js/supabase-config.js"></script>
+  <script src="js/data.js"></script>
+  <script src="js/activate.js"></script>
+
+  <script>
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('sw.js').catch(() => {});
+    }
+  </script>
+</body>
+</html>

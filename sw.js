@@ -3,17 +3,19 @@
  * Enables offline functionality and install-to-home-screen
  */
 
-const CACHE_NAME = 'sahatna-v4';
+const CACHE_NAME = 'sahatna-v5';
 const ASSETS = [
   './',
   './index.html',
   './clinic.html',
   './admin.html',
+  './activate.html',
   './css/styles.css',
   './js/data.js',
   './js/app.js',
   './js/clinic.js',
   './js/admin.js',
+  './js/activate.js',
   './js/supabase-config.js',
   './js/db.js',
   './manifest.json',

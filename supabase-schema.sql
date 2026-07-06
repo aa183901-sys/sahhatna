@@ -39,6 +39,7 @@ CREATE TABLE IF NOT EXISTS clinics (
   lat DECIMAL(10,6) DEFAULT 0,
   lng DECIMAL(10,6) DEFAULT 0,
   status TEXT DEFAULT 'pending' CHECK (status IN ('approved','pending','rejected')),
+  activation_code TEXT, -- 6-char code generated on approval, NULL after activation
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
@@ -218,6 +219,8 @@ DROP POLICY IF EXISTS "Allow all schedules manage" ON schedules;
 DROP POLICY IF EXISTS "Admin manage doctors" ON doctors;
 DROP POLICY IF EXISTS "Admin update doctors" ON doctors;
 DROP POLICY IF EXISTS "Admin delete doctors" ON doctors;
+-- Drop old clinic_users policies (replaced by self-insert + admin manage)
+DROP POLICY IF EXISTS "Admin manage clinic_users" ON clinic_users;
 
 -- ---- specialties & cities (public read, admin write) ----
 CREATE POLICY "Public read specialties" ON specialties FOR SELECT USING (true);
@@ -246,8 +249,9 @@ CREATE POLICY "Clinic or admin insert doctors" ON doctors FOR INSERT
 CREATE POLICY "Clinic or admin update doctors" ON doctors FOR UPDATE
   USING (is_admin() OR clinic_id = get_current_clinic_id())
   WITH CHECK (is_admin() OR clinic_id = get_current_clinic_id());
--- Only admin can delete doctors (protects related bookings data)
-CREATE POLICY "Admin delete doctors" ON doctors FOR DELETE USING (is_admin());
+-- Clinic can delete their own doctors; admin can delete any
+CREATE POLICY "Clinic or admin delete doctors" ON doctors FOR DELETE
+  USING (is_admin() OR clinic_id = get_current_clinic_id());
 
 -- ---- schedules ----
 -- Public can see all schedules (to show available slots)
@@ -316,9 +320,14 @@ CREATE POLICY "Create reminders" ON reminders FOR INSERT WITH CHECK (true);
 -- A user can only read their own clinic_users row (to get clinic_id after login)
 CREATE POLICY "User read own clinic_user" ON clinic_users FOR SELECT
   USING (user_id = auth.uid());
--- Only admin can insert/update/delete clinic_users
-CREATE POLICY "Admin manage clinic_users" ON clinic_users FOR ALL
+-- A newly signed-up user can insert their own clinic_users row (for activation flow)
+CREATE POLICY "User self-insert clinic_user" ON clinic_users FOR INSERT
+  WITH CHECK (user_id = auth.uid());
+-- Admin can manage all clinic_users (update/delete)
+CREATE POLICY "Admin manage clinic_users" ON clinic_users FOR UPDATE
   USING (is_admin()) WITH CHECK (is_admin());
+CREATE POLICY "Admin delete clinic_users" ON clinic_users FOR DELETE
+  USING (is_admin());
 
 -- ---- admin_users (NO public access) ----
 -- A user can only read their own admin_users row (to confirm admin role)
