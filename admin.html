@@ -27,6 +27,12 @@
 
   <!-- Custom Styles -->
   <link rel="stylesheet" href="css/styles.css" />
+
+  <!-- PWA -->
+  <link rel="manifest" href="manifest.json" />
+  <meta name="theme-color" content="#0d9488" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-title" content="صحتنا" />
 </head>
 <body class="bg-gray-50 min-h-screen">
 
@@ -227,6 +233,16 @@
 
   <!-- Scripts -->
   <script src="js/data.js"></script>
+  <script src="js/supabase-config.js"></script>
+  <script src="js/db.js"></script>
+  <script src="js/whatsapp.js"></script>
   <script src="js/admin.js"></script>
+
+  <!-- PWA Service Worker -->
+  <script>
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('sw.js').catch(() => {});
+    }
+  </script>
 </body>
 </html>
