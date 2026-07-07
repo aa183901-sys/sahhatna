@@ -1,4 +1,4 @@
-/**
+ /**
  * صحتنا - Admin Panel Logic
  * Handles admin login, clinic approval, doctors, bookings, and analytics.
  * All SahatnaDB calls are async (Supabase or localStorage).
@@ -61,10 +61,12 @@ async function checkAdminSession() {
   if (saved) {
     try {
       const { username } = JSON.parse(saved);
-      const db = await SahatnaDB.load();
-      const admin = db.adminUsers ? db.adminUsers.find((a) => a.username === username) : { username, name: 'مدير صحتنا' };
-      if (admin) { currentAdmin = admin; showAdminDashboard(); }
-    } catch (e) { sessionStorage.removeItem('sahatna_admin'); }
+      currentAdmin = { username, name: 'مدير صحتنا' };
+      showAdminDashboard();
+    } catch (e) {
+      console.error('Admin session restore error:', e);
+      sessionStorage.removeItem('sahatna_admin');
+    }
   }
 }
 

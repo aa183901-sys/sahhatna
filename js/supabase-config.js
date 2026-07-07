@@ -15,7 +15,7 @@ const SUPABASE_CONFIG = {
   url: 'https://cjlykvcrzzlnjannjlgq.supabase.co',
   anonKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNqbHlrdmNyenpsbmphbm5qbGdxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODMzMzY1MzEsImV4cCI6MjA5ODkxMjUzMX0.FyQJBRwTyBbjt2RCUQInV3kicFGZfAosMaig70lfGkA',
   // ضع true بعد إعداد Supabase لتفعيل قاعدة البيانات الفعلية
-  enabled: false,
+  enabled: true,
 };
 
 // Load Supabase JS SDK dynamically if enabled

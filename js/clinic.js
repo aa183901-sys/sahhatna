@@ -80,15 +80,14 @@ async function checkClinicSession() {
   if (saved) {
     try {
       const { userId, clinicId } = JSON.parse(saved);
-      const db = await SahatnaDB.load();
-      const user = db.clinicUsers ? db.clinicUsers.find((u) => u.id === userId) : { id: userId, clinicId, name: 'مدير العيادة' };
-      const clinic = db.clinics.find((c) => c.id === clinicId);
-      if (user && clinic) {
-        currentClinicUser = user;
+      const clinic = await SahatnaDB.getClinic(clinicId);
+      if (clinic) {
+        currentClinicUser = { id: userId, clinicId, name: 'مدير العيادة' };
         currentClinic = clinic;
         showDashboard();
       }
     } catch (e) {
+      console.error('Clinic session restore error:', e);
       sessionStorage.removeItem('sahatna_clinic');
     }
   }

@@ -375,10 +375,18 @@ const SahatnaDB = (function () {
     if (isSupabase()) {
       const email = `${username}@sahatna.app`;
       const { data: authData, error: authError } = await _sb.auth.signInWithPassword({ email, password });
-      if (authError || !authData.user) return null;
-      const { data: clinicUser } = await _sb.from('clinic_users').select('*').eq('user_id', authData.user.id).single();
-      if (!clinicUser) return null;
-      const { data: clinic } = await _sb.from('clinics').select('*').eq('id', clinicUser.clinic_id).single();
+      if (authError || !authData.user) {
+        if (authError) console.error('Login error:', authError);
+        return null;
+      }
+      const { data: clinicUser, error: clinicUserError } = await _sb.from('clinic_users').select('*').eq('user_id', authData.user.id).single();
+      if (!clinicUser) {
+        if (clinicUserError) console.error('clinic_users lookup error:', clinicUserError);
+        return null;
+      }
+      const { data: clinic, error: clinicError } = await _sb.from('clinics').select('*').eq('id', clinicUser.clinic_id).single();
+      if (!clinic && clinicError) console.error('clinic lookup error:', clinicError);
+      invalidateCache();
       return { user: { id: clinicUser.id, clinicId: clinicUser.clinic_id, userId: clinicUser.user_id, username: clinicUser.username, name: clinicUser.name }, clinic: clinic ? mapClinic(clinic) : null };
     }
     const db = loadLocal();
@@ -391,9 +399,16 @@ const SahatnaDB = (function () {
     if (isSupabase()) {
       const email = `${username}@sahatna.app`;
       const { data: authData, error: authError } = await _sb.auth.signInWithPassword({ email, password });
-      if (authError || !authData.user) return null;
-      const { data: adminUser } = await _sb.from('admin_users').select('*').eq('user_id', authData.user.id).single();
-      if (!adminUser) return null;
+      if (authError || !authData.user) {
+        if (authError) console.error('Login error:', authError);
+        return null;
+      }
+      const { data: adminUser, error: adminUserError } = await _sb.from('admin_users').select('*').eq('user_id', authData.user.id).single();
+      if (!adminUser) {
+        if (adminUserError) console.error('admin_users lookup error:', adminUserError);
+        return null;
+      }
+      invalidateCache();
       return { id: adminUser.id, userId: adminUser.user_id, username: adminUser.username, name: adminUser.name };
     }
     const db = loadLocal();

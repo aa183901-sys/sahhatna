@@ -270,6 +270,8 @@ CREATE POLICY "Clinic manage own schedules" ON schedules FOR ALL
 -- ---- appointments ----
 -- Public (anon) can create bookings (INSERT only)
 CREATE POLICY "Public create appointments" ON appointments FOR INSERT WITH CHECK (true);
+-- Public can read appointments (needed for slot availability checking)
+CREATE POLICY "Public read appointments" ON appointments FOR SELECT USING (true);
 -- Clinic can view & update their own appointments; admin can view & update all
 CREATE POLICY "Clinic view own appointments" ON appointments FOR SELECT
   USING (clinic_id = get_current_clinic_id() OR is_admin());
@@ -345,40 +347,140 @@ CREATE POLICY "Admin manage admin_users" ON admin_users FOR ALL
 -- ============================================================
 
 -- Clinic user: cl1 (مركز الشفاء)
-INSERT INTO auth.users (id, email, encrypted_password, email_confirmed_at, created_at, updated_at, aud, role)
-VALUES (
+INSERT INTO auth.users (
+  instance_id, id, aud, role, email, encrypted_password,
+  email_confirmed_at, created_at, updated_at,
+  confirmation_token, recovery_token, email_change_token_new, email_change,
+  raw_app_meta_data, raw_user_meta_data, is_super_admin
+) VALUES (
+  '00000000-0000-0000-0000-000000000000',
   'e0000000-0000-0000-0000-000000000001',
-  'cl1@sahatna.app',
-  crypt('1234', gen_salt('bf')),
-  NOW(), NOW(), NOW(), 'authenticated', 'authenticated'
-) ON CONFLICT (id) DO NOTHING;
+  'authenticated', 'authenticated',
+  'cl1@sahatna.app', crypt('1234', gen_salt('bf')),
+  NOW(), NOW(), NOW(),
+  '', '', '', '',
+  '{"provider":"email","providers":["email"]}', '{}', false
+) ON CONFLICT (id) DO UPDATE SET
+  instance_id = EXCLUDED.instance_id,
+  aud = EXCLUDED.aud,
+  role = EXCLUDED.role,
+  email = EXCLUDED.email,
+  encrypted_password = EXCLUDED.encrypted_password,
+  email_confirmed_at = EXCLUDED.email_confirmed_at,
+  updated_at = EXCLUDED.updated_at,
+  confirmation_token = EXCLUDED.confirmation_token,
+  recovery_token = EXCLUDED.recovery_token,
+  email_change_token_new = EXCLUDED.email_change_token_new,
+  email_change = EXCLUDED.email_change,
+  raw_app_meta_data = EXCLUDED.raw_app_meta_data,
+  raw_user_meta_data = EXCLUDED.raw_user_meta_data,
+  is_super_admin = EXCLUDED.is_super_admin;
 
 -- Clinic user: cl2 (عيادة النور)
-INSERT INTO auth.users (id, email, encrypted_password, email_confirmed_at, created_at, updated_at, aud, role)
-VALUES (
+INSERT INTO auth.users (
+  instance_id, id, aud, role, email, encrypted_password,
+  email_confirmed_at, created_at, updated_at,
+  confirmation_token, recovery_token, email_change_token_new, email_change,
+  raw_app_meta_data, raw_user_meta_data, is_super_admin
+) VALUES (
+  '00000000-0000-0000-0000-000000000000',
   'e0000000-0000-0000-0000-000000000002',
-  'cl2@sahatna.app',
-  crypt('1234', gen_salt('bf')),
-  NOW(), NOW(), NOW(), 'authenticated', 'authenticated'
-) ON CONFLICT (id) DO NOTHING;
+  'authenticated', 'authenticated',
+  'cl2@sahatna.app', crypt('1234', gen_salt('bf')),
+  NOW(), NOW(), NOW(),
+  '', '', '', '',
+  '{"provider":"email","providers":["email"]}', '{}', false
+) ON CONFLICT (id) DO UPDATE SET
+  instance_id = EXCLUDED.instance_id,
+  aud = EXCLUDED.aud,
+  role = EXCLUDED.role,
+  email = EXCLUDED.email,
+  encrypted_password = EXCLUDED.encrypted_password,
+  email_confirmed_at = EXCLUDED.email_confirmed_at,
+  updated_at = EXCLUDED.updated_at,
+  confirmation_token = EXCLUDED.confirmation_token,
+  recovery_token = EXCLUDED.recovery_token,
+  email_change_token_new = EXCLUDED.email_change_token_new,
+  email_change = EXCLUDED.email_change,
+  raw_app_meta_data = EXCLUDED.raw_app_meta_data,
+  raw_user_meta_data = EXCLUDED.raw_user_meta_data,
+  is_super_admin = EXCLUDED.is_super_admin;
 
 -- Clinic user: cl3 (مستشفى الحياة)
-INSERT INTO auth.users (id, email, encrypted_password, email_confirmed_at, created_at, updated_at, aud, role)
-VALUES (
+INSERT INTO auth.users (
+  instance_id, id, aud, role, email, encrypted_password,
+  email_confirmed_at, created_at, updated_at,
+  confirmation_token, recovery_token, email_change_token_new, email_change,
+  raw_app_meta_data, raw_user_meta_data, is_super_admin
+) VALUES (
+  '00000000-0000-0000-0000-000000000000',
   'e0000000-0000-0000-0000-000000000003',
-  'cl3@sahatna.app',
-  crypt('1234', gen_salt('bf')),
-  NOW(), NOW(), NOW(), 'authenticated', 'authenticated'
-) ON CONFLICT (id) DO NOTHING;
+  'authenticated', 'authenticated',
+  'cl3@sahatna.app', crypt('1234', gen_salt('bf')),
+  NOW(), NOW(), NOW(),
+  '', '', '', '',
+  '{"provider":"email","providers":["email"]}', '{}', false
+) ON CONFLICT (id) DO UPDATE SET
+  instance_id = EXCLUDED.instance_id,
+  aud = EXCLUDED.aud,
+  role = EXCLUDED.role,
+  email = EXCLUDED.email,
+  encrypted_password = EXCLUDED.encrypted_password,
+  email_confirmed_at = EXCLUDED.email_confirmed_at,
+  updated_at = EXCLUDED.updated_at,
+  confirmation_token = EXCLUDED.confirmation_token,
+  recovery_token = EXCLUDED.recovery_token,
+  email_change_token_new = EXCLUDED.email_change_token_new,
+  email_change = EXCLUDED.email_change,
+  raw_app_meta_data = EXCLUDED.raw_app_meta_data,
+  raw_user_meta_data = EXCLUDED.raw_user_meta_data,
+  is_super_admin = EXCLUDED.is_super_admin;
 
 -- Admin user: admin
-INSERT INTO auth.users (id, email, encrypted_password, email_confirmed_at, created_at, updated_at, aud, role)
-VALUES (
+INSERT INTO auth.users (
+  instance_id, id, aud, role, email, encrypted_password,
+  email_confirmed_at, created_at, updated_at,
+  confirmation_token, recovery_token, email_change_token_new, email_change,
+  raw_app_meta_data, raw_user_meta_data, is_super_admin
+) VALUES (
+  '00000000-0000-0000-0000-000000000000',
   'e0000000-0000-0000-0000-000000000004',
-  'admin@sahatna.app',
-  crypt('admin123', gen_salt('bf')),
-  NOW(), NOW(), NOW(), 'authenticated', 'authenticated'
-) ON CONFLICT (id) DO NOTHING;
+  'authenticated', 'authenticated',
+  'admin@sahatna.app', crypt('admin123', gen_salt('bf')),
+  NOW(), NOW(), NOW(),
+  '', '', '', '',
+  '{"provider":"email","providers":["email"]}', '{}', false
+) ON CONFLICT (id) DO UPDATE SET
+  instance_id = EXCLUDED.instance_id,
+  aud = EXCLUDED.aud,
+  role = EXCLUDED.role,
+  email = EXCLUDED.email,
+  encrypted_password = EXCLUDED.encrypted_password,
+  email_confirmed_at = EXCLUDED.email_confirmed_at,
+  updated_at = EXCLUDED.updated_at,
+  confirmation_token = EXCLUDED.confirmation_token,
+  recovery_token = EXCLUDED.recovery_token,
+  email_change_token_new = EXCLUDED.email_change_token_new,
+  email_change = EXCLUDED.email_change,
+  raw_app_meta_data = EXCLUDED.raw_app_meta_data,
+  raw_user_meta_data = EXCLUDED.raw_user_meta_data,
+  is_super_admin = EXCLUDED.is_super_admin;
+
+-- ============================================================
+-- auth.identities rows (required by GoTrue for email provider)
+-- ============================================================
+INSERT INTO auth.identities (
+  id, user_id, identity_id, provider, created_at, updated_at
+) VALUES
+  ('e0000000-0000-0000-0000-000000000001', 'e0000000-0000-0000-0000-000000000001', 'e0000000-0000-0000-0000-000000000001', 'email', NOW(), NOW()),
+  ('e0000000-0000-0000-0000-000000000002', 'e0000000-0000-0000-0000-000000000002', 'e0000000-0000-0000-0000-000000000002', 'email', NOW(), NOW()),
+  ('e0000000-0000-0000-0000-000000000003', 'e0000000-0000-0000-0000-000000000003', 'e0000000-0000-0000-0000-000000000003', 'email', NOW(), NOW()),
+  ('e0000000-0000-0000-0000-000000000004', 'e0000000-0000-0000-0000-000000000004', 'e0000000-0000-0000-0000-000000000004', 'email', NOW(), NOW())
+ON CONFLICT (id) DO UPDATE SET
+  user_id = EXCLUDED.user_id,
+  identity_id = EXCLUDED.identity_id,
+  provider = EXCLUDED.provider,
+  updated_at = EXCLUDED.updated_at;
 
 -- ============================================================
 -- Seed Data
