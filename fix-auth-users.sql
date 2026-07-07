@@ -154,11 +154,22 @@ INSERT INTO admin_users (user_id, username, name) VALUES
 ON CONFLICT (username) DO NOTHING;
 
 -- ============================================================
--- Add missing RLS policy: Public read appointments
--- (needed for slot availability checking and clinic/admin views)
+-- Security: Remove dangerous public read on appointments
+-- (was exposing patient_name, patient_phone, patient_age, patient_notes)
 -- ============================================================
 DROP POLICY IF EXISTS "Public read appointments" ON appointments;
-CREATE POLICY "Public read appointments" ON appointments FOR SELECT USING (true);
+
+-- ============================================================
+-- Secure View: public_appointment_slots
+-- Exposes ONLY (doctor_id, date, time, status) — NO patient data.
+-- Used by anon (unauthenticated patients) to check slot availability.
+-- ============================================================
+CREATE OR REPLACE VIEW public_appointment_slots AS
+SELECT doctor_id, date, time, status
+FROM appointments
+WHERE status != 'cancelled';
+
+GRANT SELECT ON public_appointment_slots TO anon;
 
 -- ============================================================
 -- Verify the fix

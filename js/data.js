@@ -109,6 +109,10 @@ const SahatnaDB = (function () {
   function mapBooking(b) {
     return { id: b.id, doctorId: b.doctor_id, clinicId: b.clinic_id, patientName: b.patient_name, patientPhone: b.patient_phone, patientAge: b.patient_age, patientNotes: b.patient_notes, date: b.date, time: b.time, service: b.service, price: b.price, status: b.status, paymentMethod: b.payment_method, createdAt: b.created_at };
   }
+  // Map a slot from the secure public_appointment_slots view (no patient data)
+  function mapSlot(s) {
+    return { id: s.doctor_id + s.date + s.time, doctorId: s.doctor_id, clinicId: null, patientName: null, patientPhone: null, patientAge: null, patientNotes: null, date: s.date, time: s.time, service: null, price: null, status: s.status, paymentMethod: null, createdAt: null };
+  }
   function mapReview(r) {
     return { id: r.id, doctorId: r.doctor_id, patientName: r.patient_name, patientPhone: r.patient_phone, rating: r.rating, comment: r.comment, date: r.created_at ? r.created_at.slice(0, 10) : '', verified: r.verified, appointmentId: r.appointment_id };
   }
@@ -135,17 +139,19 @@ const SahatnaDB = (function () {
   async function loadFromSupabase() {
     if (cache && Date.now() - cacheTime < CACHE_TTL) return cache;
     try {
-      const [specs, cits, clins, docs, scheds, revs, apts, rems] = await Promise.all([
+      // Use public_appointment_slots (secure view, no patient data) for anon users
+      // Authenticated clinic/admin users will use appointments directly via RLS
+      const [specs, cits, clins, docs, scheds, revs, slots, rems] = await Promise.all([
         _sb.from('specialties').select('*'), _sb.from('cities').select('*'),
         _sb.from('clinics').select('*'), _sb.from('doctors').select('*'),
         _sb.from('schedules').select('*'), _sb.from('reviews').select('*'),
-        _sb.from('appointments').select('*'), _sb.from('reminders').select('*'),
+        _sb.from('public_appointment_slots').select('*'), _sb.from('reminders').select('*'),
       ]);
       cache = {
         specialties: (specs.data || []).map(mapSpecialty), cities: (cits.data || []).map(mapCity),
         clinics: (clins.data || []).map(mapClinic), doctors: (docs.data || []).map(mapDoctor),
         schedules: groupSchedules(scheds.data || []), reviews: (revs.data || []).map(mapReview),
-        bookings: (apts.data || []).map(mapBooking), reminders: (rems.data || []).map(mapReminder),
+        bookings: (slots.data || []).map(mapSlot), reminders: (rems.data || []).map(mapReminder),
         clinicUsers: [], adminUsers: [],
       };
       cacheTime = Date.now();

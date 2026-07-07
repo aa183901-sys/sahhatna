@@ -270,8 +270,6 @@ CREATE POLICY "Clinic manage own schedules" ON schedules FOR ALL
 -- ---- appointments ----
 -- Public (anon) can create bookings (INSERT only)
 CREATE POLICY "Public create appointments" ON appointments FOR INSERT WITH CHECK (true);
--- Public can read appointments (needed for slot availability checking)
-CREATE POLICY "Public read appointments" ON appointments FOR SELECT USING (true);
 -- Clinic can view & update their own appointments; admin can view & update all
 CREATE POLICY "Clinic view own appointments" ON appointments FOR SELECT
   USING (clinic_id = get_current_clinic_id() OR is_admin());
@@ -338,6 +336,19 @@ CREATE POLICY "User read own admin_user" ON admin_users FOR SELECT
 -- Only admin can insert/update/delete admin_users
 CREATE POLICY "Admin manage admin_users" ON admin_users FOR ALL
   USING (is_admin()) WITH CHECK (is_admin());
+
+-- ============================================================
+-- Secure View: public_appointment_slots
+-- Exposes ONLY (doctor_id, date, time, status) — NO patient data.
+-- Used by anon (unauthenticated patients) to check slot availability.
+-- ============================================================
+CREATE OR REPLACE VIEW public_appointment_slots AS
+SELECT doctor_id, date, time, status
+FROM appointments
+WHERE status != 'cancelled';
+
+-- Grant read access to anon (unauthenticated patients)
+GRANT SELECT ON public_appointment_slots TO anon;
 
 -- ============================================================
 -- Demo Auth Users

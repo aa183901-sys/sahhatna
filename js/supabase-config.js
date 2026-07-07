@@ -6,9 +6,9 @@
  * 3. استبدل القيم أدناه
  * 4. شغّل supabase-schema.sql في SQL Editor
  *
- * ملاحظة: حالياً enabled = false لاستخدام localStorage (الوضع التجريبي)
- * مع الحسابات التجريبية (cl1/1234, cl2/1234, cl3/1234, admin/admin123).
- * لتفعيل Supabase، ضع enabled = true بعد التأكد من إنشاء مستخدمي auth.users.
+ * ملاحظة: Supabase مفعّل (enabled = true) — البيانات تُخزن في PostgreSQL.
+ * الحسابات التجريبية (cl1/1234, cl2/1234, cl3/1234, admin/admin123) تعمل
+ * عبر Supabase Auth الحقيقي. تأكد من تشغيل supabase-schema.sql في SQL Editor.
  */
 
 const SUPABASE_CONFIG = {
