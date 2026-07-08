@@ -109,10 +109,6 @@ const SahatnaDB = (function () {
   function mapBooking(b) {
     return { id: b.id, doctorId: b.doctor_id, clinicId: b.clinic_id, patientName: b.patient_name, patientPhone: b.patient_phone, patientAge: b.patient_age, patientNotes: b.patient_notes, date: b.date, time: b.time, service: b.service, price: b.price, status: b.status, paymentMethod: b.payment_method, createdAt: b.created_at };
   }
-  // Map a slot from the secure public_appointment_slots view (no patient data)
-  function mapSlot(s) {
-    return { id: s.doctor_id + s.date + s.time, doctorId: s.doctor_id, clinicId: null, patientName: null, patientPhone: null, patientAge: null, patientNotes: null, date: s.date, time: s.time, service: null, price: null, status: s.status, paymentMethod: null, createdAt: null };
-  }
   function mapReview(r) {
     return { id: r.id, doctorId: r.doctor_id, patientName: r.patient_name, patientPhone: r.patient_phone, rating: r.rating, comment: r.comment, date: r.created_at ? r.created_at.slice(0, 10) : '', verified: r.verified, appointmentId: r.appointment_id };
   }
@@ -139,19 +135,22 @@ const SahatnaDB = (function () {
   async function loadFromSupabase() {
     if (cache && Date.now() - cacheTime < CACHE_TTL) return cache;
     try {
-      // Use public_appointment_slots (secure view, no patient data) for anon users
-      // Authenticated clinic/admin users will use appointments directly via RLS
-      const [specs, cits, clins, docs, scheds, revs, slots, rems] = await Promise.all([
+      // Fetch appointments directly (full table). RLS policy "Clinic view own
+      // appointments" returns only the current clinic's rows for authenticated
+      // clinic users, all rows for admin, and an empty set for anon users.
+      // Anon users don't need db.bookings (the patient booking page uses
+      // getAvailableSlots() which queries public_appointment_slots directly).
+      const [specs, cits, clins, docs, scheds, revs, apts, rems] = await Promise.all([
         _sb.from('specialties').select('*'), _sb.from('cities').select('*'),
         _sb.from('clinics').select('*'), _sb.from('doctors').select('*'),
         _sb.from('schedules').select('*'), _sb.from('reviews').select('*'),
-        _sb.from('public_appointment_slots').select('*'), _sb.from('reminders').select('*'),
+        _sb.from('appointments').select('*'), _sb.from('reminders').select('*'),
       ]);
       cache = {
         specialties: (specs.data || []).map(mapSpecialty), cities: (cits.data || []).map(mapCity),
         clinics: (clins.data || []).map(mapClinic), doctors: (docs.data || []).map(mapDoctor),
         schedules: groupSchedules(scheds.data || []), reviews: (revs.data || []).map(mapReview),
-        bookings: (slots.data || []).map(mapSlot), reminders: (rems.data || []).map(mapReminder),
+        bookings: (apts.data || []).map(mapBooking), reminders: (rems.data || []).map(mapReminder),
         clinicUsers: [], adminUsers: [],
       };
       cacheTime = Date.now();
@@ -194,8 +193,40 @@ const SahatnaDB = (function () {
       const h = Math.floor(t / 60), m = t % 60;
       slots.push({ time: `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`, label: formatTime(h, m) });
     }
-    const booked = db.bookings.filter((b) => b.doctorId === doctorId && b.date === dateStr && b.status !== 'cancelled');
-    const bookedTimes = booked.map((b) => b.time);
+    // Determine booked times. In Supabase mode, query the secure
+    // public_appointment_slots view directly so anon (unauthenticated) patients
+    // can check availability without needing SELECT access to the full
+    // appointments table (RLS would return an empty set for them). In
+    // localStorage mode, fall back to the in-memory bookings list.
+    let bookedTimes = [];
+    if (isSupabase()) {
+      // Prefer the secure public_appointment_slots view (no patient data).
+      // Fall back to the appointments table if the view is unavailable (e.g.
+      // the schema hasn't been applied yet on this project). We only select
+      // the `time` column to minimise data transfer and avoid exposing patient
+      // fields even if RLS isn't enforced yet.
+      let data = null;
+      try {
+        const res = await _sb.from('public_appointment_slots')
+          .select('time')
+          .eq('doctor_id', doctorId)
+          .eq('date', dateStr);
+        data = res.data;
+        if (res.error) throw res.error;
+      } catch (e) {
+        const res2 = await _sb.from('appointments')
+          .select('time')
+          .eq('doctor_id', doctorId)
+          .eq('date', dateStr)
+          .neq('status', 'cancelled');
+        data = res2.data || [];
+      }
+      bookedTimes = (data || []).map((s) => s.time);
+    } else {
+      bookedTimes = db.bookings
+        .filter((b) => b.doctorId === doctorId && b.date === dateStr && b.status !== 'cancelled')
+        .map((b) => b.time);
+    }
     return slots.filter((s) => !bookedTimes.includes(s.time));
   }
 
