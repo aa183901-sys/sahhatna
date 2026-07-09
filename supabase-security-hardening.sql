@@ -447,9 +447,57 @@ WHERE d.clinic_id IN (SELECT id FROM clinics WHERE status = 'approved');
 
 GRANT SELECT ON public_doctor_summary TO anon;
 
--- ============================================================
--- 15. Summary of Security Changes
--- ============================================================
+  -- ============================================================
+  -- 15. Notifications Log Table
+  -- Tracks every notification sent (WhatsApp, SMS, email) with template,
+  -- channel, status, and delivery metadata. Essential for auditing
+  -- communication and debugging delivery failures.
+  -- ============================================================
+  CREATE TABLE IF NOT EXISTS notifications_log (
+    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    user_id UUID, -- auth.users(id) or NULL for anon/patient
+    appointment_id UUID REFERENCES appointments(id) ON DELETE SET NULL,
+    channel TEXT NOT NULL CHECK (channel IN ('whatsapp', 'sms', 'email', 'push')),
+    template TEXT NOT NULL, -- e.g. 'booking_confirmation', 'reminder_24h', 'reminder_2h', 'otp'
+    recipient_phone TEXT,
+    recipient_name TEXT,
+    content TEXT, -- the message content sent
+    status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'sent', 'delivered', 'failed', 'read')),
+    provider_message_id TEXT, -- ID from WhatsApp/SMS provider for tracking
+    error_message TEXT,
+    sent_at TIMESTAMPTZ,
+    delivered_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+  );
+
+  ALTER TABLE notifications_log ENABLE ROW LEVEL SECURITY;
+
+  -- Clinic can view notifications for their own appointments; admin can view all
+  CREATE POLICY "Clinic view own notifications" ON notifications_log FOR SELECT
+    USING (
+      appointment_id IN (
+        SELECT a.id FROM appointments a
+        WHERE a.clinic_id = get_current_clinic_id()
+      )
+      OR is_admin()
+    );
+
+  -- Only service_role (Edge Functions) can insert/update notifications
+  -- Client-side code should NOT write directly to this table.
+  -- Notifications are created by Edge Functions after sending via WhatsApp API.
+  CREATE POLICY "Admin manage notifications" ON notifications_log FOR ALL
+    USING (is_admin()) WITH CHECK (is_admin());
+
+  -- Indexes for notifications_log
+  CREATE INDEX IF NOT EXISTS idx_notifications_user ON notifications_log(user_id);
+  CREATE INDEX IF NOT EXISTS idx_notifications_appointment ON notifications_log(appointment_id);
+  CREATE INDEX IF NOT EXISTS idx_notifications_status ON notifications_log(status);
+  CREATE INDEX IF NOT EXISTS idx_notifications_created ON notifications_log(created_at DESC);
+  CREATE INDEX IF NOT EXISTS idx_notifications_channel ON notifications_log(channel);
+
+  -- ============================================================
+  -- 16. Summary of Security Changes
+  -- ============================================================
 -- ✅ audit_log table with RLS (admin read only, function-based insert)
 -- ✅ appointment_status_log table with RLS (tracks all status changes)
 -- ✅ payments table with RLS (admin manage, clinic view own)

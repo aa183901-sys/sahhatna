@@ -3,7 +3,7 @@
  * Enables offline functionality and install-to-home-screen
  */
 
-const CACHE_NAME = 'sahatna-v6';
+const CACHE_NAME = 'sahatna-v7';
 const ASSETS = [
   './',
   './index.html',
@@ -50,7 +50,7 @@ self.addEventListener('fetch', (event) => {
 
   // Skip non-GET requests
   if (request.method !== 'GET') return;
-
+ 
   // Skip cross-origin requests (Tailwind CDN, Google Fonts, Supabase API, etc.)
   const url = new URL(request.url);
   if (url.origin !== location.origin) return;

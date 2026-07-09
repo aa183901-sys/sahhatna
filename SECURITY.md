@@ -11,7 +11,8 @@
 1. `supabase-schema.sql` — السكيما الأساسية (موجودة مسبقاً)
 2. `supabase-security-hardening.sql` — تحصين RLS + جداول جديدة
 3. `supabase-field-encryption.sql` — تشفير الحقول الحساسة
-4. `supabase-rls-tests.sql` — اختبارات RLS (للتحقق فقط)
+4. `fix-booking-rls.sql` — إصلاح دالة `create_appointment` + إزالة `is_recent_own_appointment`
+5. `supabase-rls-tests.sql` — اختبارات RLS v2 (محاكاة أدوار حقيقية)
 
 ## 🔧 التغييرات المنفذة
 
@@ -78,12 +79,17 @@ SELECT check_rate_limit('192.168.1.1', 'login', 5, 15);
 
 ### 7. تشديد المواعيد (Appointments)
 
-**الملف:** `supabase-security-hardening.sql` (القسم 7)
+**الملف:** `supabase-security-hardening.sql` (القسم 7) + `fix-booking-rls.sql`
 
 - **لا يمكن حجز موعد بتاريخ ماضي**
 - يجب أن يكون الطبيب موجوداً
 - يجب أن تكون العيادة موافق عليها (`status = 'approved'`)
 - يجب أن ينتمي الطبيب للعيادة المحددة
+- **دالة `create_appointment()` SECURITY DEFINER** تتحقق من كل القواعد قبل الإدراج
+- **منع الحجز المزدوج:** فحص صريح لنفس الطبيب/التاريخ/الوقت
+- **تسجيل تدقيق تلقائي:** كل حجز يُسجل في `audit_log`
+- **إنشاء تذكير تلقائي:** يُنشأ تذكير مع كل حجز ناجح
+- **حذف `is_recent_own_appointment()` المعطوبة** (كانت تقارن UUID مع رقم هاتف)
 
 ### 8. تشديد التذكيرات (Reminders)
 
@@ -137,32 +143,43 @@ SELECT check_rate_limit('192.168.1.1', 'login', 5, 15);
 - عرض `clinic_appointment_details` يفك التشفير للمستخدمين المخولين
 - **⚠️ الإنتاج:** استبدل `get_encryption_key()` بـ Supabase Vault
 
-## 🧪 اختبارات RLS
+## 🧪 اختبارات RLS (v2 — محاكاة أدوار حقيقية)
 
 **الملف:** `supabase-rls-tests.sql`
 
-يختبر 4 أدوار:
+### التحسينات في v2:
+- ✅ يستخدم `request.jwt.claims` لمحاكاة مستخدمين حقيقيين بـ `auth.uid()` محدد
+- ✅ يختبر مستخدم عيادة حقيقي (cl1) يرى مواعيد عيادته فقط
+- ✅ يختبر أدمن حقيقي يرى كل المواعيد
+- ✅ يختبر دالة `create_appointment()` RPC مع كل حالات الفشل والنجاح
+- ✅ يختبر جدول `notifications_log` الجديد
+- ✅ نتائج PASS/FAIL فعلية (ليست INFO فقط)
+
+### الأدوار المختبرة:
 - `anon` (زائر / مريض غير مسجل)
-- `authenticated` (مستخدم مسجل)
-- `clinic` (عيادة)
-- `admin` / `service_role`
+- `authenticated` clinic user (cl1: `e0000000-0000-0000-0000-000000000001`)
+- `authenticated` admin user (`e0000000-0000-0000-0000-000000000004`)
+- `service_role` (للاختبارات الإدارية)
 
 ### الاختبارات المغطاة:
 
 | # | الاختبار | النتيجة المتوقعة |
 |---|---------|-----------------|
 | 1.1-1.6 | anon يقرأ البيانات العامة | ✅ مسموح |
-| 1.7-1.13 | anon يقرأ الجداول الحساسة | ❌ ممنوع (0 صفوف) |
+| 1.7-1.15 | anon يقرأ الجداول الحساسة | ❌ ممنوع (0 صفوف) |
 | 2.1 | حجز موعد بتاريخ ماضي | ❌ ممنوع |
 | 2.2 | تقييم بدون موعد | ❌ ممنوع |
 | 2.3 | تسجيل عيادة بهاتف خاطئ | ❌ ممنوع |
 | 2.4 | تسجيل عيادة باسم قصير | ❌ ممنوع |
 | 2.5 | تذكير بدون موعد صحيح | ❌ ممنوع |
-| 5.1 | دالة تحديد المعدل | ✅ تعمل |
-| 6.1 | دالة سجل التدقيق | ✅ تعمل |
-| 7.1-7.3 | العروض الآمنة | ✅ تعمل |
-| 8.1 | منع الحجز المزدوج | ✅ ممنوع |
-| 9.1 | تقييمين لنفس الموعد | ❌ ممنوع |
+| 3.1-3.7 | `create_appointment()` RPC | ✅/❌ حسب الحالة |
+| 4.1-4.4 | clinic user يرى عيادته فقط | ✅ مسموح/ممنوع |
+| 5.1-5.4 | admin يرى كل البيانات | ✅ مسموح |
+| 6.1-6.4 | دالة تحديد المعدل | ✅ تعمل |
+| 7.1 | دالة سجل التدقيق | ✅ تعمل |
+| 8.1-8.3 | العروض الآمنة | ✅ تعمل |
+| 9.1 | منع الحجز المزدوج | ✅ ممنوع |
+| 10.1 | تقييمين لنفس الموعد | ❌ ممنوع |
 
 ## 🔄 تغييرات كود الواجهة
 
@@ -171,6 +188,32 @@ SELECT check_rate_limit('192.168.1.1', 'login', 5, 15);
 1. **`mapBooking()`**: أضيف حقل `paymentStatus`
 2. **`loadFromSupabase()`**: يستخدم `clinic_appointment_details` لفك تشفير الملاحظات
    - fallback إلى `appointments` إذا العرض غير متوفر
+3. **`createBooking()`**: يستخدم `create_appointment()` RPC بدلاً من INSERT مباشر
+   - يعيد UUID الحقيقي للموعد
+   - ينشئ تذكير تلقائياً
+   - يسجل في audit_log
+4. **`logAudit()`**: دالة جديدة لتسجيل العمليات الإدارية
+   - تستدعي `log_audit_entry()` SECURITY DEFINER
+   - تعمل بصمت (لا تفشل العملية إذا فشل التسجيل)
+
+### `js/clinic.js`
+
+- **`updateBookingStatus()`**: يسجل `appointment.update_status` في audit_log
+- **`cancelBooking()`**: يسجل `appointment.cancel` في audit_log
+- **`deleteDoctor()`**: يسجل `doctor.delete` في audit_log
+- **`handleAddDoctor()`**: يسجل `doctor.create` في audit_log
+- **`saveSchedule()`**: يسجل `schedule.update` في audit_log
+
+### `js/admin.js`
+
+- **`approveClinic()`**: يسجل `clinic.approve` في audit_log
+- **`rejectClinic()`**: يسجل `clinic.reject` في audit_log
+
+### `js/db.js` (DEPRECATED)
+
+- **تم إهمال الملف بالكامل** — غير محمّل بأي صفحة HTML
+- كان يحتوي على ثغرات: `clinicLogin` يبحث عن عمود `password` غير موجود
+- كل المنطق مُجمّع في `js/data.js` (SahatnaDB)
 
 ## ⚠️ قائمة التحقق للإنتاج
 
@@ -192,6 +235,7 @@ SELECT check_rate_limit('192.168.1.1', 'login', 5, 15);
 | `payments` | معاملات الدفع | عيادة ترى مدفوعاتها |
 | `staff_roles` | صلاحيات الموظفين | مستخدم يرى دوره |
 | `rate_limit` | تحديد المعدل | مرفوض للعميل تماماً |
+| `notifications_log` | سجل الإشعارات المرسلة | عيادة ترى إشعاراتها |
 
 ## 🛡️ ملخص السياسات المُشدّدة
 

@@ -1,4 +1,4 @@
-/**
+/ **
  * صحتنا - Clinic Dashboard Logic
  * Handles clinic login, bookings, calendar, doctors, schedule, and reminders.
  * All SahatnaDB calls are async (Supabase or localStorage).
@@ -220,6 +220,7 @@ async function renderBookingsList() {
 
 async function updateBookingStatus(bookingId, status) {
   await SahatnaDB.updateBookingStatus(bookingId, status);
+  await SahatnaDB.logAudit('appointment.update_status', 'appointments', bookingId, { new_status: status, clinic_id: currentClinic.id });
   await renderBookingsList();
   await renderClinicStats();
   showToast(`تم تحديث حالة الحجز إلى: ${getStatusLabel(status)}`, 'success');
@@ -228,6 +229,7 @@ async function updateBookingStatus(bookingId, status) {
 async function cancelBooking(bookingId) {
   if (confirm('هل أنت متأكد من إلغاء هذا الحجز؟')) {
     await SahatnaDB.updateBookingStatus(bookingId, 'cancelled');
+    await SahatnaDB.logAudit('appointment.cancel', 'appointments', bookingId, { clinic_id: currentClinic.id });
     await renderBookingsList();
     await renderClinicStats();
     showToast('تم إلغاء الحجز', 'info');
@@ -379,6 +381,7 @@ async function deleteDoctor(doctorId, doctorName) {
   if (confirm(`هل أنت متأكد من حذف الطبيب "${doctorName}"؟\n\nسيتم حذف:\n• بيانات الطبيب\n• جدول الدوام\n• التقييمات\n\nملاحظة: الحجوزات الحالية لن تُحذف.`)) {
     try {
       await SahatnaDB.deleteDoctor(doctorId);
+      await SahatnaDB.logAudit('doctor.delete', 'doctors', doctorId, { name: doctorName, clinic_id: currentClinic.id });
       showToast('تم حذف الطبيب بنجاح', 'success');
       await renderClinicDoctors();
       await populateScheduleDoctorSelect();
@@ -468,7 +471,8 @@ async function handleAddDoctor(event) {
   };
 
   try {
-    await SahatnaDB.addDoctor(doctorData);
+    const newDoctor = await SahatnaDB.addDoctor(doctorData);
+    await SahatnaDB.logAudit('doctor.create', 'doctors', newDoctor.id, { name: name, specialty_id: specialtyId, clinic_id: currentClinic.id });
     showToast('تمت إضافة الطبيب بنجاح', 'success');
     hideAddDoctorForm();
     await renderClinicDoctors();
@@ -579,6 +583,7 @@ async function saveSchedule(doctorId) {
   }
 
   await SahatnaDB.updateSchedule(doctorId, slots, slotDuration);
+  await SahatnaDB.logAudit('schedule.update', 'schedules', doctorId, { slots_count: slots.length, slot_duration: slotDuration, clinic_id: currentClinic.id });
   showToast('تم حفظ دوام الطبيب بنجاح', 'success');
 }
 

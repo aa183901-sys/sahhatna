@@ -253,35 +253,36 @@ const SahatnaDB = (function () {
 
   async function createBooking(data) {
     if (isSupabase()) {
-      // Insert WITHOUT .select() — RLS blocks SELECT for anon users, which
-      // would cause .select() to return an empty array and .single() to throw
-      // PGRST116. Using return=minimal (no .select()) the INSERT succeeds and
-      // we construct the booking object from the input data.
-      const { error } = await _sb.from('appointments').insert({
-        doctor_id: data.doctorId, clinic_id: data.clinicId, patient_name: data.patientName,
-        patient_phone: data.patientPhone, patient_age: data.patientAge, patient_notes: data.patientNotes,
-        date: data.date, time: data.time, service: data.service, price: data.price,
-        status: 'confirmed', payment_method: data.paymentMethod || 'clinic',
+      // Use the secure create_appointment() RPC function (SECURITY DEFINER)
+      // which validates all inputs, prevents double booking, creates the
+      // reminder, logs to audit_log, and returns the real appointment UUID.
+      // This bypasses RLS SELECT restrictions for anon users safely.
+      const { data: apt, error } = await _sb.rpc('create_appointment', {
+        p_doctor_id: data.doctorId,
+        p_clinic_id: data.clinicId,
+        p_patient_name: data.patientName,
+        p_patient_phone: data.patientPhone,
+        p_patient_age: data.patientAge || null,
+        p_patient_notes: data.patientNotes || null,
+        p_date: data.date,
+        p_time: data.time,
+        p_service: data.service,
+        p_price: data.price,
+        p_payment_method: data.paymentMethod || 'clinic',
       });
 
       if (error) throw error;
 
-      // Skip reminder creation for anon users — reminders.appointment_id is
-      // NOT NULL and we don't have the UUID (RLS blocks reading it back).
-      // The clinic/admin can create reminders manually from the dashboard.
-      // This is non-critical: the booking itself succeeded.
-
       invalidateCache();
 
-      // Construct the booking object from input data (we don't have the real
-      // UUID, but the booking was saved successfully in the database).
+      // Map the RPC response (snake_case) to our camelCase format
       return {
-        id: 'confirmed', doctorId: data.doctorId, clinicId: data.clinicId,
-        patientName: data.patientName, patientPhone: data.patientPhone,
-        patientAge: data.patientAge, patientNotes: data.patientNotes,
-        date: data.date, time: data.time, service: data.service, price: data.price,
-        status: 'confirmed', paymentMethod: data.paymentMethod || 'clinic',
-        createdAt: new Date().toISOString(),
+        id: apt.id, doctorId: apt.doctor_id, clinicId: apt.clinic_id,
+        patientName: apt.patient_name, patientPhone: apt.patient_phone,
+        patientAge: apt.patient_age, patientNotes: apt.patient_notes,
+        date: apt.date, time: apt.time, service: apt.service, price: apt.price,
+        status: apt.status, paymentMethod: apt.payment_method,
+        createdAt: apt.created_at,
       };
     }
     const db = loadLocal();
@@ -476,6 +477,26 @@ const SahatnaDB = (function () {
 
   async function signOut() { if (isSupabase()) await _sb.auth.signOut(); }
 
+  // ---- Audit Logging ----
+  // Logs administrative actions to the audit_log table via the
+  // log_audit_entry() SECURITY DEFINER function. Only works for
+  // authenticated users (clinic/admin). Silently fails if not available.
+  async function logAudit(action, targetTable, targetId, details) {
+    if (!isSupabase()) return; // No-op in localStorage mode
+    try {
+      await _sb.rpc('log_audit_entry', {
+        p_action: action,
+        p_target_table: targetTable,
+        p_target_id: targetId || null,
+        p_details: details || {},
+        p_actor_type: 'user',
+      });
+    } catch (e) {
+      // Audit logging is non-critical — don't fail the operation
+      console.warn('Audit log failed:', e.message);
+    }
+  }
+
   async function getPendingReminders() { return (await load()).reminders.filter((r) => !r.sent); }
 
   async function markReminderSent(reminderId) {
@@ -512,6 +533,6 @@ const SahatnaDB = (function () {
     createBooking, updateBookingStatus, getBookingsByClinic, getBookingsByDoctor,
     updateSchedule, approveClinic, rejectClinic, activateClinic, addClinic,
     addDoctor, deleteDoctor, clinicLogin, adminLogin, signOut,
-    getPendingReminders, markReminderSent, getStats,
+    getPendingReminders, markReminderSent, getStats, logAudit,
   };
 })();

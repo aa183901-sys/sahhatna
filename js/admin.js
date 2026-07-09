@@ -150,6 +150,7 @@ async function renderAdminClinics() {
 
 async function approveClinic(clinicId) {
   const clinic = await SahatnaDB.approveClinic(clinicId);
+  await SahatnaDB.logAudit('clinic.approve', 'clinics', clinicId, { name: clinic.name, activation_code_generated: true });
   await renderAdminClinics();
   await renderAdminStats();
   const code = clinic.activationCode || clinic.activation_code;
@@ -160,6 +161,7 @@ async function approveClinic(clinicId) {
 async function rejectClinic(clinicId) {
   if (confirm('هل أنت متأكد من رفض/إيقاف هذه العيادة؟')) {
     await SahatnaDB.rejectClinic(clinicId);
+    await SahatnaDB.logAudit('clinic.reject', 'clinics', clinicId, {});
     await renderAdminClinics();
     await renderAdminStats();
     showToast('تم رفض/إيقاف العيادة', 'info');
