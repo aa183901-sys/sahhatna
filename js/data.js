@@ -107,7 +107,7 @@ const SahatnaDB = (function () {
     return { id: d.id, name: d.name, nameEn: d.name_en, specialtyId: d.specialty_id, clinicId: d.clinic_id, photo: d.photo, bio: d.bio, qualifications: d.qualifications, experienceYears: d.experience_years, price: d.price, gender: d.gender, languages: d.languages || ['العربية'], rating: parseFloat(d.rating) || 0, reviewsCount: d.reviews_count || 0, services: d.services || ['clinic'], verified: d.verified, featured: d.featured };
   }
   function mapBooking(b) {
-    return { id: b.id, doctorId: b.doctor_id, clinicId: b.clinic_id, patientName: b.patient_name, patientPhone: b.patient_phone, patientAge: b.patient_age, patientNotes: b.patient_notes, date: b.date, time: b.time, service: b.service, price: b.price, status: b.status, paymentMethod: b.payment_method, createdAt: b.created_at };
+    return { id: b.id, doctorId: b.doctor_id, clinicId: b.clinic_id, patientName: b.patient_name, patientPhone: b.patient_phone, patientAge: b.patient_age, patientNotes: b.patient_notes, date: b.date, time: b.time, service: b.service, price: b.price, status: b.status, paymentMethod: b.payment_method, paymentStatus: b.payment_status || 'clinic', createdAt: b.created_at };
   }
   function mapReview(r) {
     return { id: r.id, doctorId: r.doctor_id, patientName: r.patient_name, patientPhone: r.patient_phone, rating: r.rating, comment: r.comment, date: r.created_at ? r.created_at.slice(0, 10) : '', verified: r.verified, appointmentId: r.appointment_id };
@@ -135,22 +135,31 @@ const SahatnaDB = (function () {
   async function loadFromSupabase() {
     if (cache && Date.now() - cacheTime < CACHE_TTL) return cache;
     try {
-      // Fetch appointments directly (full table). RLS policy "Clinic view own
-      // appointments" returns only the current clinic's rows for authenticated
-      // clinic users, all rows for admin, and an empty set for anon users.
-      // Anon users don't need db.bookings (the patient booking page uses
-      // getAvailableSlots() which queries public_appointment_slots directly).
-      const [specs, cits, clins, docs, scheds, revs, apts, rems] = await Promise.all([
+      // Fetch appointments. For authenticated users (clinic/admin), try the
+      // secure clinic_appointment_details view which decrypts patient_notes.
+      // For anon users, the appointments table returns an empty set (RLS),
+      // and the patient booking page uses getAvailableSlots() which queries
+      // public_appointment_slots directly.
+      let aptsRes;
+      try {
+        // Try the secure view first (decrypts patient_notes for authorized users)
+        aptsRes = await _sb.from('clinic_appointment_details').select('*');
+        if (aptsRes.error) throw aptsRes.error;
+      } catch (e) {
+        // Fall back to raw appointments table if view doesn't exist yet
+        aptsRes = await _sb.from('appointments').select('*');
+      }
+      const [specs, cits, clins, docs, scheds, revs, rems] = await Promise.all([
         _sb.from('specialties').select('*'), _sb.from('cities').select('*'),
         _sb.from('clinics').select('*'), _sb.from('doctors').select('*'),
         _sb.from('schedules').select('*'), _sb.from('reviews').select('*'),
-        _sb.from('appointments').select('*'), _sb.from('reminders').select('*'),
+        _sb.from('reminders').select('*'),
       ]);
       cache = {
         specialties: (specs.data || []).map(mapSpecialty), cities: (cits.data || []).map(mapCity),
         clinics: (clins.data || []).map(mapClinic), doctors: (docs.data || []).map(mapDoctor),
         schedules: groupSchedules(scheds.data || []), reviews: (revs.data || []).map(mapReview),
-        bookings: (apts.data || []).map(mapBooking), reminders: (rems.data || []).map(mapReminder),
+        bookings: (aptsRes.data || []).map(mapBooking), reminders: (rems.data || []).map(mapReminder),
         clinicUsers: [], adminUsers: [],
       };
       cacheTime = Date.now();

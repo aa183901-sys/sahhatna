@@ -1,5 +1,5 @@
--- ============================================================
--- صحتنا (Sahatna) - Supabase Database Schema (Secure)
+ ============================================================
+-- صحتنا (Sahatna) - Supa--base Database Schema (Secure)
 -- Run this in Supabase SQL Editor after creating a project
 --
 -- SECURITY: Uses Supabase Auth (no plain-text passwords).
