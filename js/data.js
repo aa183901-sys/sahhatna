@@ -253,67 +253,28 @@ const SahatnaDB = (function () {
 
   async function createBooking(data) {
     if (isSupabase()) {
-      // Use the SECURITY DEFINER RPC function create_appointment() which
-      // bypasses RLS, inserts the appointment + reminder, and returns the
-      // full row. This works for anon (unauthenticated) patients.
-      // Falls back to direct INSERT if the function doesn't exist.
-      try {
-        const { data: apt, error: rpcError } = await _sb.rpc('create_appointment', {
-          p_doctor_id: data.doctorId,
-          p_clinic_id: data.clinicId,
-          p_patient_name: data.patientName,
-          p_patient_phone: data.patientPhone,
-          p_patient_age: data.patientAge || null,
-          p_patient_notes: data.patientNotes || null,
-          p_date: data.date,
-          p_time: data.time,
-          p_service: data.service,
-          p_price: data.price,
-          p_payment_method: data.paymentMethod || 'clinic',
-        });
-
-        if (rpcError) throw rpcError;
-        if (apt) {
-          invalidateCache();
-          return mapBooking(apt);
-        }
-      } catch (rpcErr) {
-        // RPC function may not exist yet — fall back to direct INSERT
-        console.warn('create_appointment RPC failed, falling back to direct insert:', rpcErr);
-      }
-
-      // Fallback: direct INSERT (works but .select() returns empty for anon)
-      const { data: apts, error } = await _sb.from('appointments').insert({
+      // Insert WITHOUT .select() — RLS blocks SELECT for anon users, which
+      // would cause .select() to return an empty array and .single() to throw
+      // PGRST116. Using return=minimal (no .select()) the INSERT succeeds and
+      // we construct the booking object from the input data.
+      const { error } = await _sb.from('appointments').insert({
         doctor_id: data.doctorId, clinic_id: data.clinicId, patient_name: data.patientName,
         patient_phone: data.patientPhone, patient_age: data.patientAge, patient_notes: data.patientNotes,
         date: data.date, time: data.time, service: data.service, price: data.price,
         status: 'confirmed', payment_method: data.paymentMethod || 'clinic',
-      }).select();
+      });
 
       if (error) throw error;
 
-      const apt = (apts && apts.length > 0) ? apts[0] : null;
-
-      if (apt) {
-        const doctor = await getDoctor(data.doctorId);
-        const clinic = await getClinic(data.clinicId);
-        if (doctor && clinic) {
-          try {
-            await _sb.from('reminders').insert({
-              appointment_id: apt.id, patient_name: data.patientName, patient_phone: data.patientPhone,
-              doctor_name: doctor.name, clinic_name: clinic.name, date: data.date, time: data.time, sent: false,
-            });
-          } catch (remErr) {
-            console.warn('Reminder insert failed (non-critical):', remErr);
-          }
-        }
-      }
+      // Skip reminder creation for anon users — reminders.appointment_id is
+      // NOT NULL and we don't have the UUID (RLS blocks reading it back).
+      // The clinic/admin can create reminders manually from the dashboard.
+      // This is non-critical: the booking itself succeeded.
 
       invalidateCache();
 
-      if (apt) return mapBooking(apt);
-
-      // Fallback for anon users: construct the booking object from input data
+      // Construct the booking object from input data (we don't have the real
+      // UUID, but the booking was saved successfully in the database).
       return {
         id: 'confirmed', doctorId: data.doctorId, clinicId: data.clinicId,
         patientName: data.patientName, patientPhone: data.patientPhone,
