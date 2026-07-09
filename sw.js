@@ -3,7 +3,7 @@
  * Enables offline functionality and install-to-home-screen
  */
 
-const CACHE_NAME = 'sahatna-v5';
+const CACHE_NAME = 'sahatna-v6';
 const ASSETS = [
   './',
   './index.html',
@@ -43,18 +43,36 @@ self.addEventListener('activate', (event) => {
   self.clients.claim();
 });
 
-// Fetch: cache-first for assets, network-first for API
+// Fetch: network-first for JS/CSS/HTML (so updates are picked up immediately),
+// cache-first for other assets, fallback to cache when offline.
 self.addEventListener('fetch', (event) => {
   const { request } = event;
 
   // Skip non-GET requests
   if (request.method !== 'GET') return;
 
-  // Skip cross-origin requests (Tailwind CDN, Google Fonts, etc.)
+  // Skip cross-origin requests (Tailwind CDN, Google Fonts, Supabase API, etc.)
   const url = new URL(request.url);
   if (url.origin !== location.origin) return;
 
-  // Cache-first strategy
+  // Network-first for JS, CSS, and HTML — ensures users always get the latest
+  // code (critical for bug fixes). Falls back to cache when offline.
+  if (url.pathname.endsWith('.js') || url.pathname.endsWith('.css') || url.pathname.endsWith('.html') || url.pathname === '/' || url.pathname === './') {
+    event.respondWith(
+      fetch(request)
+        .then((response) => {
+          const clone = response.clone();
+          caches.open(CACHE_NAME).then((cache) => {
+            cache.put(request, clone);
+          });
+          return response;
+        })
+        .catch(() => caches.match(request).then((cached) => cached || new Response('Offline', { status: 503 })))
+    );
+    return;
+  }
+
+  // Cache-first for other assets (images, manifest, etc.)
   event.respondWith(
     caches.match(request).then((cached) => {
       if (cached) return cached;
