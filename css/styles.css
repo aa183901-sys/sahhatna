@@ -217,6 +217,7 @@ html {
   text-align: center;
   background: white;
   color: var(--gray-700);
+  touch-action: manipulation;
 }
 .time-slot:hover {
   border-color: var(--primary);
@@ -243,6 +244,7 @@ html {
   cursor: pointer;
   transition: all 0.2s ease;
   background: white;
+  touch-action: manipulation;
 }
 .day-btn:hover {
   border-color: var(--primary-light);
@@ -268,6 +270,7 @@ html {
   z-index: 50;
   padding: 16px;
   animation: fadeIn 0.2s ease-out;
+  -webkit-overflow-scrolling: touch;
 }
 .modal-content {
   background: white;
@@ -277,6 +280,19 @@ html {
   max-height: 90vh;
   overflow-y: auto;
   animation: scaleIn 0.3s ease-out;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Mobile: account for virtual keyboard when modal contains inputs */
+@media (max-width: 640px) {
+  .modal-overlay {
+    padding: 8px;
+    align-items: flex-start;
+  }
+  .modal-content {
+    max-height: calc(100vh - 16px);
+    -webkit-overflow-scrolling: touch;
+  }
 }
 
 /* Toast notification */
@@ -385,6 +401,7 @@ html {
   transition: all 0.2s ease;
   border: none;
   cursor: pointer;
+  touch-action: manipulation;
 }
 .btn-primary:hover {
   background: var(--primary-dark);
@@ -409,6 +426,7 @@ html {
   border: 2px solid var(--primary);
   transition: all 0.2s ease;
   cursor: pointer;
+  touch-action: manipulation;
 }
 .btn-secondary:hover {
   background: var(--primary-lighter);

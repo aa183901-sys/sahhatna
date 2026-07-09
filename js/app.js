@@ -458,8 +458,18 @@ async function selectDate(dateStr) {
     dayBtn.classList.add('selected');
   }
 
-  const slots = await SahatnaDB.getAvailableSlots(currentDoctorId, dateStr);
   const container = document.getElementById('timeSlotsContainer');
+  container.innerHTML = '<p class="text-gray-400 text-sm text-center py-4">جاري تحميل المواعيد...</p>';
+
+  let slots;
+  try {
+    slots = await SahatnaDB.getAvailableSlots(currentDoctorId, dateStr);
+  } catch (error) {
+    console.error('Error loading slots:', error);
+    container.innerHTML = '<p class="text-danger text-sm text-center py-4">تعذر تحميل المواعيد. حاول مرة أخرى.</p>';
+    updateBookButton();
+    return;
+  }
 
   if (slots.length === 0) {
     container.innerHTML = '<p class="text-gray-400 text-sm text-center py-4">لا توجد مواعيد متاحة في هذا اليوم</p>';
@@ -513,6 +523,7 @@ async function openBookingForm() {
   if (!currentSelectedDate || !currentSelectedTime || !currentDoctorId) return;
 
   const doctor = await SahatnaDB.getDoctor(currentDoctorId);
+  if (!doctor) { showToast('لم يتم العثور على بيانات الطبيب', 'error'); return; }
   const clinic = await SahatnaDB.getClinic(doctor.clinicId);
   const dayName = SahatnaDB.getDayName(new Date(currentSelectedDate + 'T00:00:00').getDay());
 
@@ -530,7 +541,7 @@ async function openBookingForm() {
               <img src="${doctor.photo}" class="w-14 h-14 rounded-xl object-cover" />
               <div>
                 <h4 class="font-bold text-gray-800">${doctor.name}</h4>
-                <p class="text-sm text-gray-600">${(await SahatnaDB.getSpecialty(doctor.specialtyId)).name}</p>
+                <p class="text-sm text-gray-600">${(await SahatnaDB.getSpecialty(doctor.specialtyId))?.name || ''}</p>
               </div>
             </div>
             <div class="grid grid-cols-2 gap-2 text-sm">
@@ -555,7 +566,7 @@ async function openBookingForm() {
               </div>
             </div>
           </div>
-          <form id="bookingForm" onsubmit="confirmBooking(event)">
+          <form id="bookingForm" onsubmit="confirmBooking(); return false;">
             <div class="space-y-3">
               <div>
                 <label class="block text-sm font-semibold text-gray-600 mb-1">الاسم الكامل *</label>
@@ -563,7 +574,7 @@ async function openBookingForm() {
               </div>
               <div>
                 <label class="block text-sm font-semibold text-gray-600 mb-1">رقم الهاتف *</label>
-                <input type="tel" id="patientPhone" required placeholder="07XX XXX XXXX" pattern="07[0-9]{9}" class="form-input" />
+                <input type="tel" id="patientPhone" required placeholder="07XX XXX XXXX" inputmode="numeric" class="form-input" />
                 <p class="text-xs text-gray-400 mt-1">سيتم إرسال تأكيد الحجز والتذكير على هذا الرقم</p>
               </div>
               <div>
@@ -589,7 +600,7 @@ async function openBookingForm() {
             </div>
             <div class="flex gap-3 mt-6">
               <button type="button" onclick="openDoctorModal('${currentDoctorId}')" class="btn-secondary flex-1">رجوع</button>
-              <button type="submit" class="btn-primary flex-1">تأكيد الحجز</button>
+              <button type="button" onclick="confirmBooking()" id="confirmBookingBtn" class="btn-primary flex-1">تأكيد الحجز</button>
             </div>
           </form>
         </div>
@@ -599,7 +610,7 @@ async function openBookingForm() {
 }
 
 async function confirmBooking(event) {
-  event.preventDefault();
+  if (event && event.preventDefault) event.preventDefault();
 
   const patientName = document.getElementById('patientName').value.trim();
   const patientPhone = document.getElementById('patientPhone').value.trim();
@@ -611,22 +622,58 @@ async function confirmBooking(event) {
     return;
   }
 
-  const doctor = await SahatnaDB.getDoctor(currentDoctorId);
+  // Flexible phone validation (allow spaces/dashes, validate in JS not HTML pattern)
+  const cleanPhone = patientPhone.replace(/[\s\-]/g, '');
+  if (!/^07\d{9}$/.test(cleanPhone)) {
+    showToast('رقم الهاتف غير صحيح. يجب أن يبدأ بـ 07 ويتكون من 11 رقماً', 'error');
+    return;
+  }
 
-  const booking = await SahatnaDB.createBooking({
-    doctorId: currentDoctorId,
-    clinicId: doctor.clinicId,
-    patientName,
-    patientPhone,
-    patientAge: patientAge || null,
-    patientNotes,
-    date: currentSelectedDate,
-    time: currentSelectedTime,
-    service: currentSelectedService,
-    price: doctor.price,
-  });
+  // Show loading state and prevent double submission
+  const submitBtn = document.getElementById('confirmBookingBtn');
+  if (submitBtn) {
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'جاري الحجز...';
+    submitBtn.classList.add('opacity-75', 'cursor-wait');
+  }
 
-  showBookingSuccess(booking, doctor);
+  try {
+    const doctor = await SahatnaDB.getDoctor(currentDoctorId);
+    if (!doctor) {
+      showToast('لم يتم العثور على بيانات الطبيب', 'error');
+      resetSubmitBtn();
+      return;
+    }
+
+    const booking = await SahatnaDB.createBooking({
+      doctorId: currentDoctorId,
+      clinicId: doctor.clinicId,
+      patientName,
+      patientPhone: cleanPhone,
+      patientAge: patientAge || null,
+      patientNotes,
+      date: currentSelectedDate,
+      time: currentSelectedTime,
+      service: currentSelectedService,
+      price: doctor.price,
+    });
+
+    showBookingSuccess(booking, doctor);
+  } catch (error) {
+    console.error('Booking error:', error);
+    const msg = (error && error.message) ? error.message : 'حدث خطأ أثناء الحجز. يرجى المحاولة مرة أخرى.';
+    showToast(msg, 'error');
+    resetSubmitBtn();
+  }
+}
+
+function resetSubmitBtn() {
+  const submitBtn = document.getElementById('confirmBookingBtn');
+  if (submitBtn) {
+    submitBtn.disabled = false;
+    submitBtn.textContent = 'تأكيد الحجز';
+    submitBtn.classList.remove('opacity-75', 'cursor-wait');
+  }
 }
 
 async function showBookingSuccess(booking, doctor) {
