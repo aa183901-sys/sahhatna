@@ -4,18 +4,25 @@
  * 1. أنشئ مشروع على https://supabase.com
  * 2. انسخ URL و anon key من Settings > API
  * 3. استبدل القيم أدناه
- * 4. شغّل supabase-schema.sql في SQL Editor
+ * 4. شغّل ملفات SQL بالترتيب في SQL Editor:
+ *    a. supabase-schema.sql
+ *    b. supabase-security-hardening.sql
+ *    c. fix-auth-users.sql  ← مهم جداً لحسابات الدخول
+ *    d. fix-booking-rls.sql
+ *    e. supabase-field-encryption.sql
+ *    f. supabase-vault-migration.sql
+ * 5. بعد التأكد من نجاح كل الملفات، غيّر enabled إلى true
  *
- * ملاحظة: Supabase مفعّل (enabled = true) — البيانات تُخزن في PostgreSQL.
- * الحسابات التجريبية (cl1/1234, cl2/1234, cl3/1234, admin/admin123) تعمل
- * عبر Supabase Auth الحقيقي. تأكد من تشغيل supabase-schema.sql في SQL Editor.
+ * ⚠️ حالياً enabled = false (وضع التجربة) — البيانات تُخزن في المتصفح فقط.
+ *    هذا يضمن عمل جميع الوظائف (حجز، دخول عيادة، دخول إدارة) فوراً.
+ *    لتفعيل قاعدة البيانات الفعلية، شغّل ملفات SQL أعلاه ثم ضع enabled = true.
  */
 
 const SUPABASE_CONFIG = {
   url: 'https://cjlykvcrzzlnjannjlgq.supabase.co',
   anonKey: 'sb_publishable_21PkKAquV9ZtlZZumU3AeQ_NMY8Ffpc',
-  // ضع true بعد إعداد Supabase لتفعيل قاعدة البيانات الفعلية
-  enabled: true,
+  // ⚠️ ضع true فقط بعد تشغيل كل ملفات SQL في Supabase SQL Editor
+  enabled: false,
 };
 
 // Load Supabase JS SDK dynamically if enabled
