@@ -24,20 +24,34 @@ sahhatna/
 ├── index.html              # تطبيق المريض
 ├── clinic.html             # لوحة تحكم العيادة
 ├── admin.html              # لوحة تحكم الإدارة
+├── activate.html           # تفعيل حساب العيادة
+├── my-bookings.html        # حجوزات المريض
 ├── manifest.json           # PWA manifest
 ├── sw.js                   # Service Worker (PWA offline)
-├── supabase-schema.sql     # SQL schema لقاعدة البيانات
+├── supabase-schema.sql     # SQL schema الأساسية
+├── supabase-security-hardening.sql  # تحصين RLS + جداول جديدة
+├── supabase-field-encryption.sql    # تشفير الحقول الحساسة
+├── supabase-vault-migration.sql     # استبدال المفتاح بـ Vault
+├── supabase-migration-functions.sql # دوال SQL المطلوبة
+├── supabase-rls-tests.sql           # اختبارات RLS v2
+├── fix-booking-rls.sql              # إصلاح دالة الحجز
+├── fix-auth-users.sql               # إصلاح مستخدمي المصادقة
+├── SECURITY.md                      # توثيق الأمان
+├── BACKUP-PLAN.md                   # خطة النسخ الاحتياطي
 ├── css/
 │   └── styles.css          # الأنماط المخصصة
 ├── js/
-│   ├── data.js             # طبقة البيانات (localStorage)
+│   ├── data.js             # طبقة البيانات (Supabase + localStorage)
 │   ├── supabase-config.js  # إعدادات Supabase
-│   ├── db.js               # طبقة موحدة (Supabase أو localStorage)
 │   ├── whatsapp.js         # تذكيرات واتساب
 │   ├── app.js              # منطق تطبيق المريض
 │   ├── clinic.js           # منطق لوحة العيادة
-│   └── admin.js            # منطق لوحة الإدارة
-└── README.md
+│   ├── admin.js            # منطق لوحة الإدارة
+│   ├── activate.js         # منطق تفعيل العيادة
+│   └── my-bookings.js      # منطق حجوزات المريض
+└── supabase/functions/     # Edge Functions
+    ├── rate-limit/         # تحديد المعدل
+    └── webhook-verify/     # التحقق من توقيع webhooks
 ```
 
 ## 🗄️ إعداد قاعدة البيانات (Supabase)

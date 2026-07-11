@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://aa183901-sys.github.io/sahhatna/sitemap.xml

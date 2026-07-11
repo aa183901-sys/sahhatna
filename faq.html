@@ -1,0 +1,103 @@
+﻿<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>صحتنا - الأسئلة الشائعة</title>
+  <meta name="description" content="إجابات على أكثر الأسئلة شيوعاً حول منصة صحتنا" />
+
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = { theme: { extend: { colors: { primary: { DEFAULT: '#0d9488', dark: '#0f766e', light: '#14b8a6', lighter: '#ccfbf1' } }, fontFamily: { sans: ['Cairo', 'Tajawal', 'system-ui', 'sans-serif'] } } } };
+  </script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="css/styles.css" />
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='20' fill='%230d9488'/%3E%3Ctext x='50' y='68' font-size='60' text-anchor='middle' fill='white' font-family='Arial'%3E+%3C/text%3E%3C/svg%3E" />
+  <link rel="manifest" href="manifest.json" />
+  <meta name="theme-color" content="#0d9488" />
+</head>
+<body class="min-h-screen">
+
+  <header class="bg-white shadow-sm sticky top-0 z-40">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6">
+      <div class="flex items-center justify-between h-16">
+        <a href="index.html" class="flex items-center gap-2">
+          <div class="w-10 h-10 bg-primary rounded-xl flex items-center justify-center text-white text-xl font-bold">+</div>
+          <div><h1 class="text-xl font-bold text-gray-800">صحتنا</h1><p class="text-xs text-gray-500 -mt-1">الأسئلة الشائعة</p></div>
+        </a>
+        <a href="index.html" class="text-sm text-gray-500 hover:text-primary font-medium">← العودة للرئيسية</a>
+      </div>
+    </div>
+  </header>
+
+  <section class="max-w-3xl mx-auto px-4 sm:px-6 py-12">
+    <div class="text-center mb-8">
+      <div class="w-16 h-16 bg-primary-lighter text-primary rounded-2xl flex items-center justify-center text-3xl mx-auto mb-4">❓</div>
+      <h1 class="text-3xl font-bold text-gray-800 mb-2">الأسئلة الشائعة</h1>
+      <p class="text-gray-500">إجابات على أكثر الأسئلة شيوعاً</p>
+    </div>
+
+    <div class="space-y-4">
+      <details class="bg-white rounded-2xl shadow-sm p-5 group">
+        <summary class="font-bold text-gray-800 cursor-pointer flex items-center justify-between">كيف أحجز موعداً؟ <span class="text-primary text-xl group-open:rotate-180 transition">⌄</span></summary>
+        <p class="text-gray-600 text-sm mt-3 leading-relaxed">ابحث عن طبيب حسب التخصص أو المدينة، اختر اليوم والوقت المناسب، أدخل بياناتك، وسيتم تأكيد الحجز فوراً. ستظهر كل حجوزاتك في صفحة "حجوزاتي".</p>
+      </details>
+
+      <details class="bg-white rounded-2xl shadow-sm p-5 group">
+        <summary class="font-bold text-gray-800 cursor-pointer flex items-center justify-between">هل الحجز مجاني؟ <span class="text-primary text-xl group-open:rotate-180 transition">⌄</span></summary>
+        <p class="text-gray-600 text-sm mt-3 leading-relaxed">نعم، الحجز عبر المنصة مجاني تماماً. تدفع أجرة الكشف عند الحضور للعيادة.</p>
+      </details>
+
+      <details class="bg-white rounded-2xl shadow-sm p-5 group">
+        <summary class="font-bold text-gray-800 cursor-pointer flex items-center justify-between">كيف ألغي حجزاً؟ <span class="text-primary text-xl group-open:rotate-180 transition">⌄</span></summary>
+        <p class="text-gray-600 text-sm mt-3 leading-relaxed">ادخل إلى صفحة "حجوزاتي" برقم هاتفك، اختر الحجز الذي تريد إلغاءه واضغط "إلغاء الحجز". يفضل الإلغاء قبل الموعد بـ 24 ساعة على الأقل.</p>
+      </details>
+
+      <details class="bg-white rounded-2xl shadow-sm p-5 group">
+        <summary class="font-bold text-gray-800 cursor-pointer flex items-center justify-between">هل بياناتي آمنة؟ <span class="text-primary text-xl group-open:rotate-180 transition">⌄</span></summary>
+        <p class="text-gray-600 text-sm mt-3 leading-relaxed">نعم، نستخدم تقنيات تشفير حديثة لحماية بياناتك. لا نشارك معلوماتك مع أي طرف ثالث. اطلع على سياسة الخصوصية للتفاصيل.</p>
+      </details>
+
+      <details class="bg-white rounded-2xl shadow-sm p-5 group">
+        <summary class="font-bold text-gray-800 cursor-pointer flex items-center justify-between">كيف أسجل عيادتي على المنصة؟ <span class="text-primary text-xl group-open:rotate-180 transition">⌄</span></summary>
+        <p class="text-gray-600 text-sm mt-3 leading-relaxed">اضغط على "سجّل عيادتك معنا" في الصفحة الرئيسية، املأ النموذج، وسيقوم فريقنا بمراجعة طلبك والموافقة عليه خلال 48 ساعة.</p>
+      </details>
+
+      <details class="bg-white rounded-2xl shadow-sm p-5 group">
+        <summary class="font-bold text-gray-800 cursor-pointer flex items-center justify-between">هل التذكير برسالة SMS مجاني؟ <span class="text-primary text-xl group-open:rotate-180 transition">⌄</span></summary>
+        <p class="text-gray-600 text-sm mt-3 leading-relaxed">حالياً نرسل التذكيرات عبر واتساب مجاناً. نعمل على إضافة بوابة SMS عراقية قريباً.</p>
+      </details>
+
+      <details class="bg-white rounded-2xl shadow-sm p-5 group">
+        <summary class="font-bold text-gray-800 cursor-pointer flex items-center justify-between">هل يمكنني تقييم الطبيب بعد الزيارة؟ <span class="text-primary text-xl group-open:rotate-180 transition">⌄</span></summary>
+        <p class="text-gray-600 text-sm mt-3 leading-relaxed">نعم، بعد إكمال الزيارة، يمكنك تقييم الطبيب من صفحة "حجوزاتي" بنجوم وتعليق. التقييمات موثّقة ومرتبطة بحجز مكتمل فعلياً.</p>
+      </details>
+
+      <details class="bg-white rounded-2xl shadow-sm p-5 group">
+        <summary class="font-bold text-gray-800 cursor-pointer flex items-center justify-between">ما هي أنواع الخدمات المتاحة؟ <span class="text-primary text-xl group-open:rotate-180 transition">⌄</span></summary>
+        <p class="text-gray-600 text-sm mt-3 leading-relaxed">نوفر ثلاثة أنواع: زيارة عيادة (حضورية)، استشارة فيديو (أونلاين)، وزيارة منزلية (الطبيب يأتي إليك). ليس كل الأطباء يوفرون كل الخدمات.</p>
+      </details>
+
+      <details class="bg-white rounded-2xl shadow-sm p-5 group">
+        <summary class="font-bold text-gray-800 cursor-pointer flex items-center justify-between">هل الموقع يعمل بدون إنترنت؟ <span class="text-primary text-xl group-open:rotate-180 transition">⌄</span></summary>
+        <p class="text-gray-600 text-sm mt-3 leading-relaxed">نعم، الموقع يعمل كتطبيق ويب تقدمي (PWA). يمكنك تصفح الأطباء والتخصصات بدون إنترنت، لكن الحجز يتطلب اتصالاً.</p>
+      </details>
+    </div>
+
+    <div class="bg-primary-lighter rounded-2xl p-6 text-center mt-8">
+      <p class="text-gray-700 mb-3">لم تجد إجابة لسؤالك؟</p>
+      <a href="contact.html" class="btn-primary inline-block">تواصل معنا</a>
+    </div>
+  </section>
+
+  <footer class="bg-gray-800 text-gray-300 py-6 mt-12">
+    <div class="max-w-7xl mx-auto px-4 text-center text-sm">
+      © 2025 صحتنا — جميع الحقوق محفوظة. صُنع للعراق 🇮🇶
+    </div>
+  </footer>
+
+  <script>if ('serviceWorker' in navigator) { navigator.serviceWorker.register('sw.js').catch(function() {}); }</script>
+</body>
+</html>

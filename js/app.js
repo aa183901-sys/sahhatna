@@ -15,6 +15,15 @@ function formatPrice(price) {
   return new Intl.NumberFormat('ar-IQ').format(price) + ' د.ع';
 }
 
+// Debounce helper — delays function execution until input stops for `wait` ms
+function debounce(fn, wait = 300) {
+  let t;
+  return (...args) => {
+    clearTimeout(t);
+    t = setTimeout(() => fn(...args), wait);
+  };
+}
+
 function showToast(message, type = 'success') {
   const container = document.getElementById('toastContainer');
   const toast = document.createElement('div');
@@ -717,7 +726,10 @@ async function showBookingSuccess(booking, doctor) {
             <span>📱</span>
             <span>سيصلك تذكير على الرقم ${booking.patientPhone} قبل الموعد</span>
           </div>
-          <button onclick="closeSuccessModal()" class="btn-primary w-full">تم</button>
+          <div class="flex gap-3">
+            <button onclick="closeSuccessModal()" class="btn-secondary flex-1">تم</button>
+            <a href="my-bookings.html" class="btn-primary flex-1 text-center">📋 عرض حجوزاتي</a>
+          </div>
         </div>
       </div>
     </div>
@@ -812,7 +824,7 @@ async function submitClinicRegistration(event) {
 
 // ---- Event Listeners -----------------------------------------------------
 function setupEventListeners() {
-  document.getElementById('searchName').addEventListener('input', renderDoctors);
+  document.getElementById('searchName').addEventListener('input', debounce(renderDoctors, 300));
   document.getElementById('searchCity').addEventListener('change', renderDoctors);
   document.getElementById('searchSpecialty').addEventListener('change', renderDoctors);
   document.getElementById('sortBy').addEventListener('change', renderDoctors);

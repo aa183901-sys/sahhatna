@@ -574,6 +574,30 @@ html {
   border: 1px solid rgba(255, 255, 255, 0.8);
 }
 
+/* Filter tab (My Bookings page) */
+.filter-tab {
+  color: var(--gray-500);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+}
+.filter-tab.active {
+  background: var(--primary);
+  color: white;
+}
+
+/* Star button (review modal) */
+.star-btn {
+  cursor: pointer;
+  border: none;
+  background: none;
+  padding: 0;
+  line-height: 1;
+}
+.star-btn:hover {
+  transform: scale(1.2);
+}
+
 /* Responsive helpers */
 @media (max-width: 640px) {
   .hide-mobile { display: none; }

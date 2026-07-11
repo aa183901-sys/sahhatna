@@ -11,8 +11,9 @@
 1. `supabase-schema.sql` — السكيما الأساسية (موجودة مسبقاً)
 2. `supabase-security-hardening.sql` — تحصين RLS + جداول جديدة
 3. `supabase-field-encryption.sql` — تشفير الحقول الحساسة
-4. `fix-booking-rls.sql` — إصلاح دالة `create_appointment` + إزالة `is_recent_own_appointment`
-5. `supabase-rls-tests.sql` — اختبارات RLS v2 (محاكاة أدوار حقيقية)
+4. `supabase-vault-migration.sql` — استبدال مفتاح التشفير بـ Supabase Vault ✅ جديد
+5. `fix-booking-rls.sql` — إصلاح دالة `create_appointment` + إزالة `is_recent_own_appointment`
+6. `supabase-rls-tests.sql` — اختبارات RLS v2 (محاكاة أدوار حقيقية)
 
 ## 🔧 التغييرات المنفذة
 
@@ -134,14 +135,16 @@ SELECT check_rate_limit('192.168.1.1', 'login', 5, 15);
 
 ### 14. تشفير الحقول الحساسة
 
-**الملف:** `supabase-field-encryption.sql`
+**الملف:** `supabase-field-encryption.sql` + `supabase-vault-migration.sql`
 
 - `patient_notes_encrypted` (BYTEA) — ملاحظات طبية مشفرة
 - `national_id_encrypted` (BYTEA) — رقم الهوية المشفر
 - دوال `encrypt_field()` و `decrypt_field()` بـ `SECURITY DEFINER`
 - Trigger تلقائي يشفر `patient_notes` عند الإدراج/التحديث
 - عرض `clinic_appointment_details` يفك التشفير للمستخدمين المخولين
-- **⚠️ الإنتاج:** استبدل `get_encryption_key()` بـ Supabase Vault
+- ✅ **مفتاح التشفير مخزّن في Supabase Vault** (وليس مكشوفاً في الكود)
+- ✅ **دالة `rotate_encryption_key()`** للتدوير الدوري الآمن
+- ✅ **إعادة تشفير البيانات الموجودة** بالمفتاح الجديد تلقائياً
 
 ## 🧪 اختبارات RLS (v2 — محاكاة أدوار حقيقية)
 
@@ -209,22 +212,22 @@ SELECT check_rate_limit('192.168.1.1', 'login', 5, 15);
 - **`approveClinic()`**: يسجل `clinic.approve` في audit_log
 - **`rejectClinic()`**: يسجل `clinic.reject` في audit_log
 
-### `js/db.js` (DEPRECATED)
+### `js/db.js` (محذوف)
 
-- **تم إهمال الملف بالكامل** — غير محمّل بأي صفحة HTML
-- كان يحتوي على ثغرات: `clinicLogin` يبحث عن عمود `password` غير موجود
+- **تم حذف الملف بالكامل** ✅ — كان يحتوي على ثغرات أمنية
 - كل المنطق مُجمّع في `js/data.js` (SahatnaDB)
+- تم تحديث `sw.js` لإزالته من قائمة الكاش
 
 ## ⚠️ قائمة التحقق للإنتاج
 
-- [ ] استبدال مفتاح التشفير بـ Supabase Vault
-- [ ] تدوير مفتاح التشفير دورياً
+- [x] استبدال مفتاح التشفير بـ Supabase Vault ✅ (`supabase-vault-migration.sql`)
+- [x] تدوير مفتاح التشفير دورياً ✅ (`rotate_encryption_key()` function)
 - [ ] مراجعة من يستدعي `decrypt_field()`
-- [ ] خطة نسخ احتياطي مع إدارة المفاتيح
-- [ ] تفعيل Rate limiting على Edge Functions
-- [ ] التحقق من توقيع webhooks (ZainCash / واتساب) بـ HS256
+- [x] خطة نسخ احتياطي مع إدارة المفاتيح ✅ (`BACKUP-PLAN.md`)
+- [x] تفعيل Rate limiting على Edge Functions ✅ (`supabase/functions/rate-limit/`)
+- [x] التحقق من توقيع webhooks (ZainCash / واتساب) بـ HS256 ✅ (`supabase/functions/webhook-verify/`)
 - [ ] اختبار RLS قبل كل نشر جديد
-- [ ] عدم كشف `service_role key` في كود العميل أبداً
+- [x] عدم كشف `service_role key` في كود العميل أبداً ✅ (تم التحقق — فقط anon key مستخدم)
 
 ## 📊 ملخص الجداول الجديدة
 

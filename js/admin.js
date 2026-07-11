@@ -23,7 +23,7 @@ function getClinicStatusBadge(status) {
 }
 
 function getBookingStatusBadge(status) {
-  const badges = { confirmed: '<span class="badge badge-info">مؤكد</span>', completed: '<span class="badge badge-success">مكتمل</span>', cancelled: '<span class="badge badge-danger">ملغي</span>' };
+  const badges = { confirmed: '<span class="badge badge-info">مؤكد</span>', completed: '<span class="badge badge-success">مكتمل</span>', cancelled: '<span class="badge badge-danger">ملغي</span>', no_show: '<span class="badge badge-warning">لم يحضر</span>' };
   return badges[status] || badges.confirmed;
 }
 
@@ -199,10 +199,59 @@ async function renderAdminDoctors() {
           <div><p class="text-xs text-gray-400">حجوزات</p><p class="font-bold text-sm">${bookings.length}</p></div>
           <div><p class="text-xs text-gray-400">إيرادات</p><p class="font-bold text-sm text-success">${formatPrice(revenue)}</p></div>
         </div>
+        <div class="flex gap-2 mt-3">
+          <button onclick="toggleDoctorVerified('${d.id}')" class="btn-secondary text-xs flex-1">${d.verified ? 'إلغاء التوثيق' : '✓ توثيق'}</button>
+          <button onclick="toggleDoctorFeatured('${d.id}')" class="btn-secondary text-xs flex-1">${d.featured ? 'إلغاء التمييز' : '⭐ تمييز'}</button>
+        </div>
       </div>
     `);
   }
   list.innerHTML = cards.join('');
+}
+
+// ---- Toggle Doctor Verified/Featured ----
+async function toggleDoctorVerified(doctorId) {
+  const db = await SahatnaDB.load();
+  const doctor = db.doctors.find((d) => d.id === doctorId);
+  if (!doctor) return;
+  await SahatnaDB.updateDoctor(doctorId, { verified: !doctor.verified });
+  await SahatnaDB.logAudit('doctor.toggle_verified', 'doctors', doctorId, { verified: !doctor.verified });
+  await renderAdminDoctors();
+  showToast(doctor.verified ? 'تم إلغاء توثيق الطبيب' : 'تم توثيق الطبيب', 'success');
+}
+
+async function toggleDoctorFeatured(doctorId) {
+  const db = await SahatnaDB.load();
+  const doctor = db.doctors.find((d) => d.id === doctorId);
+  if (!doctor) return;
+  await SahatnaDB.updateDoctor(doctorId, { featured: !doctor.featured });
+  await SahatnaDB.logAudit('doctor.toggle_featured', 'doctors', doctorId, { featured: !doctor.featured });
+  await renderAdminDoctors();
+  showToast(doctor.featured ? 'تم إلغاء تمييز الطبيب' : 'تم تمييز الطبيب', 'success');
+}
+
+// ---- Export All Bookings CSV ----
+async function exportAllBookingsCSV() {
+  const db = await SahatnaDB.load();
+  if (db.bookings.length === 0) { showToast('لا توجد حجوزات للتصدير', 'info'); return; }
+  const headers = ['رقم الحجز', 'المريض', 'الهاتف', 'الطبيب', 'التخصص', 'العيادة', 'المدينة', 'التاريخ', 'الوقت', 'الخدمة', 'السعر', 'الحالة'];
+  const rows = db.bookings.map((b) => {
+    const doctor = db.doctors.find((d) => d.id === b.doctorId);
+    const specialty = doctor ? db.specialties.find((s) => s.id === doctor.specialtyId) : null;
+    const clinic = db.clinics.find((c) => c.id === b.clinicId);
+    const city = clinic ? db.cities.find((c) => c.id === clinic.cityId) : null;
+    const timeParts = b.time.split(':').map(Number);
+    return [b.id, b.patientName, b.patientPhone, doctor ? doctor.name : '', specialty ? specialty.name : '', clinic ? clinic.name : '', city ? city.name : '', b.date, SahatnaDB.formatTime(timeParts[0], timeParts[1]), b.service, b.price, b.status];
+  });
+  const csv = [headers, ...rows].map((row) => row.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(',')).join('\n');
+  const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = `تقرير_شامل_${new Date().toISOString().slice(0, 10)}.csv`;
+  link.click();
+  URL.revokeObjectURL(url);
+  showToast('تم تصدير التقرير بنجاح', 'success');
 }
 
 async function renderAdminBookings() {

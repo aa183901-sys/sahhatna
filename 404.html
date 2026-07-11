@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>صفحة غير موجودة - صحتنا</title>
+  <meta name="robots" content="noindex" />
+
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            primary: { DEFAULT: '#0d9488', dark: '#0f766e', light: '#14b8a6', lighter: '#ccfbf1' },
+          },
+          fontFamily: { sans: ['Cairo', 'Tajawal', 'system-ui', 'sans-serif'] },
+        },
+      },
+    };
+  </script>
+
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+
+  <!-- Custom Styles -->
+  <link rel="stylesheet" href="css/styles.css" />
+
+  <!-- Favicon -->
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='20' fill='%230d9488'/%3E%3Ctext x='50' y='68' font-size='60' text-anchor='middle' fill='white' font-family='Arial'%3E+%3C/text%3E%3C/svg%3E" />
+
+  <!-- PWA -->
+  <link rel="manifest" href="manifest.json" />
+  <meta name="theme-color" content="#0d9488" />
+</head>
+<body class="bg-gray-50 min-h-screen flex items-center justify-center p-4">
+
+  <div class="text-center max-w-md">
+    <div class="text-8xl mb-4">🔍</div>
+    <h1 class="text-6xl font-extrabold text-primary mb-2">404</h1>
+    <h2 class="text-xl font-bold text-gray-800 mb-3">الصفحة غير موجودة</h2>
+    <p class="text-gray-500 mb-6">عذراً، الصفحة التي تبحث عنها غير متوفرة أو تم نقلها. تحقق من الرابط وحاول مرة أخرى.</p>
+    <div class="flex flex-wrap gap-3 justify-center">
+      <a href="index.html" class="btn-primary">🏠 العودة للرئيسية</a>
+      <a href="my-bookings.html" class="btn-secondary">📋 حجوزاتي</a>
+    </div>
+  </div>
+
+</body>
+</html>

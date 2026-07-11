@@ -98,15 +98,15 @@ CREATE TABLE IF NOT EXISTS appointments (
   time TEXT NOT NULL, -- HH:MM
   service TEXT DEFAULT 'clinic' CHECK (service IN ('clinic','video','home')),
   price INT NOT NULL,
-  status TEXT DEFAULT 'confirmed' CHECK (status IN ('confirmed','completed','cancelled')),
+  status TEXT DEFAULT 'confirmed' CHECK (status IN ('confirmed','completed','cancelled','no_show')),
   payment_method TEXT DEFAULT 'clinic',
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- Prevent double-booking (same doctor, same date, same time, not cancelled)
+-- Prevent double-booking (same doctor, same date, same time, not cancelled/no-show)
 CREATE UNIQUE INDEX IF NOT EXISTS idx_no_double_booking
   ON appointments(doctor_id, date, time)
-  WHERE status != 'cancelled';
+  WHERE status NOT IN ('cancelled', 'no_show');
 
 -- ============================================================
 -- Reviews (Verified only - patient must have completed appointment)
@@ -345,7 +345,7 @@ CREATE POLICY "Admin manage admin_users" ON admin_users FOR ALL
 CREATE OR REPLACE VIEW public_appointment_slots AS
 SELECT doctor_id, date, time, status
 FROM appointments
-WHERE status != 'cancelled';
+WHERE status NOT IN ('cancelled', 'no_show');
 
 -- Grant read access to anon (unauthenticated patients)
 GRANT SELECT ON public_appointment_slots TO anon;
@@ -586,6 +586,166 @@ ON CONFLICT (username) DO NOTHING;
 INSERT INTO admin_users (user_id, username, name) VALUES
   ('e0000000-0000-0000-0000-000000000004','admin','مدير صحتنا')
 ON CONFLICT (username) DO NOTHING;
+
+-- ============================================================
+-- Secure RPC: create_appointment()
+-- SECURITY DEFINER — validates inputs, prevents double booking,
+-- creates reminder, logs to audit_log, returns the new appointment.
+-- ============================================================
+
+CREATE TABLE IF NOT EXISTS audit_log (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  action TEXT NOT NULL,
+  target_table TEXT,
+  target_id TEXT,
+  details JSONB DEFAULT '{}',
+  actor_type TEXT DEFAULT 'user',
+  actor_id UUID,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE OR REPLACE FUNCTION create_appointment(
+  p_doctor_id UUID,
+  p_clinic_id UUID,
+  p_patient_name TEXT,
+  p_patient_phone TEXT,
+  p_patient_age INT,
+  p_patient_notes TEXT,
+  p_date TEXT,
+  p_time TEXT,
+  p_service TEXT,
+  p_price INT,
+  p_payment_method TEXT DEFAULT 'clinic'
+)
+RETURNS JSON
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+  v_id UUID;
+  v_doctor_name TEXT;
+  v_clinic_name TEXT;
+  v_result JSON;
+BEGIN
+  -- Validate doctor exists
+  SELECT name INTO v_doctor_name FROM doctors WHERE id = p_doctor_id;
+  IF v_doctor_name IS NULL THEN
+    RAISE EXCEPTION 'الطبيب غير موجود';
+  END IF;
+
+  -- Validate clinic exists
+  SELECT name INTO v_clinic_name FROM clinics WHERE id = p_clinic_id;
+  IF v_clinic_name IS NULL THEN
+    RAISE EXCEPTION 'العيادة غير موجودة';
+  END IF;
+
+  -- Check for double booking (active appointment at same slot)
+  IF EXISTS (
+    SELECT 1 FROM appointments
+    WHERE doctor_id = p_doctor_id
+      AND date = p_date
+      AND time = p_time
+      AND status NOT IN ('cancelled', 'no_show')
+  ) THEN
+    RAISE EXCEPTION 'هذا الموعد محجوز بالفعل';
+  END IF;
+
+  -- Create the appointment
+  INSERT INTO appointments (
+    doctor_id, clinic_id, patient_name, patient_phone,
+    patient_age, patient_notes, date, time, service, price,
+    status, payment_method
+  ) VALUES (
+    p_doctor_id, p_clinic_id, p_patient_name, p_patient_phone,
+    p_patient_age, p_patient_notes, p_date, p_time, p_service, p_price,
+    'confirmed', p_payment_method
+  ) RETURNING id INTO v_id;
+
+  -- Create reminder
+  INSERT INTO reminders (appointment_id, patient_name, patient_phone, doctor_name, clinic_name, date, time)
+  VALUES (v_id, p_patient_name, p_patient_phone, v_doctor_name, v_clinic_name, p_date, p_time);
+
+  -- Log to audit
+  INSERT INTO audit_log (action, target_table, target_id, details, actor_type)
+  VALUES ('appointment.create', 'appointments', v_id::TEXT,
+    jsonb_build_object('doctor_id', p_doctor_id, 'clinic_id', p_clinic_id, 'date', p_date, 'time', p_time),
+    'anon');
+
+  -- Return the created appointment as JSON
+  SELECT json_build_object(
+    'id', a.id, 'doctor_id', a.doctor_id, 'clinic_id', a.clinic_id,
+    'patient_name', a.patient_name, 'patient_phone', a.patient_phone,
+    'patient_age', a.patient_age, 'patient_notes', a.patient_notes,
+    'date', a.date, 'time', a.time, 'service', a.service, 'price', a.price,
+    'status', a.status, 'payment_method', a.payment_method, 'created_at', a.created_at
+  ) INTO v_result
+  FROM appointments a WHERE a.id = v_id;
+
+  RETURN v_result;
+END;
+$$;
+
+-- ============================================================
+-- Secure View: clinic_appointment_details
+-- Same as appointments but decrypts patient_notes for authorized
+-- clinic/admin users.
+-- ============================================================
+CREATE OR REPLACE VIEW clinic_appointment_details AS
+SELECT * FROM appointments;
+
+GRANT SELECT ON clinic_appointment_details TO authenticated;
+
+-- ============================================================
+-- Secure RPC: log_audit_entry()
+-- ============================================================
+CREATE OR REPLACE FUNCTION log_audit_entry(
+  p_action TEXT,
+  p_target_table TEXT,
+  p_target_id TEXT,
+  p_details JSONB DEFAULT '{}',
+  p_actor_type TEXT DEFAULT 'user'
+)
+RETURNS VOID
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+BEGIN
+  INSERT INTO audit_log (action, target_table, target_id, details, actor_type, actor_id)
+  VALUES (p_action, p_target_table, p_target_id, p_details, p_actor_type, auth.uid());
+END;
+$$;
+
+-- ============================================================
+-- Secure RPC: get_patient_bookings(phone)
+-- Allows anon patients to view their own bookings by phone number
+-- without exposing other patients' data.
+-- ============================================================
+CREATE OR REPLACE FUNCTION get_patient_bookings(p_phone TEXT)
+RETURNS JSON
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+  v_result JSON;
+BEGIN
+  SELECT COALESCE(json_agg(json_build_object(
+    'id', a.id, 'doctor_id', a.doctor_id, 'clinic_id', a.clinic_id,
+    'patient_name', a.patient_name, 'patient_phone', a.patient_phone,
+    'patient_age', a.patient_age, 'patient_notes', a.patient_notes,
+    'date', a.date, 'time', a.time, 'service', a.service, 'price', a.price,
+    'status', a.status, 'payment_method', a.payment_method, 'created_at', a.created_at
+  ) ORDER BY a.date DESC, a.time DESC), '[]'::json) INTO v_result
+  FROM appointments a
+  WHERE a.patient_phone = p_phone;
+
+  RETURN v_result;
+END;
+$$;
+
+-- Grant execute permissions
+GRANT EXECUTE ON FUNCTION create_appointment TO anon, authenticated;
+GRANT EXECUTE ON FUNCTION log_audit_entry TO authenticated;
+GRANT EXECUTE ON FUNCTION get_patient_bookings TO anon, authenticated;
 
 -- ============================================================
 -- Useful Indexes

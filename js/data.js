@@ -1,4 +1,4 @@
-/**
+ v/**
  * صحتنا - Sahatna Data Layer (Unified: Supabase + localStorage)
  *
  * All methods are async (return Promises). When Supabase is configured
@@ -233,7 +233,7 @@ const SahatnaDB = (function () {
       bookedTimes = (data || []).map((s) => s.time);
     } else {
       bookedTimes = db.bookings
-        .filter((b) => b.doctorId === doctorId && b.date === dateStr && b.status !== 'cancelled')
+        .filter((b) => b.doctorId === doctorId && b.date === dateStr && b.status !== 'cancelled' && b.status !== 'no_show')
         .map((b) => b.time);
     }
     return slots.filter((s) => !bookedTimes.includes(s.time));
@@ -253,37 +253,73 @@ const SahatnaDB = (function () {
 
   async function createBooking(data) {
     if (isSupabase()) {
-      // Use the secure create_appointment() RPC function (SECURITY DEFINER)
-      // which validates all inputs, prevents double booking, creates the
-      // reminder, logs to audit_log, and returns the real appointment UUID.
-      // This bypasses RLS SELECT restrictions for anon users safely.
-      const { data: apt, error } = await _sb.rpc('create_appointment', {
-        p_doctor_id: data.doctorId,
-        p_clinic_id: data.clinicId,
-        p_patient_name: data.patientName,
-        p_patient_phone: data.patientPhone,
-        p_patient_age: data.patientAge || null,
-        p_patient_notes: data.patientNotes || null,
-        p_date: data.date,
-        p_time: data.time,
-        p_service: data.service,
-        p_price: data.price,
-        p_payment_method: data.paymentMethod || 'clinic',
-      });
+      // Try the secure create_appointment() RPC function first.
+      // If it doesn't exist (schema not yet applied), fall back to direct INSERT.
+      try {
+        const { data: apt, error } = await _sb.rpc('create_appointment', {
+          p_doctor_id: data.doctorId,
+          p_clinic_id: data.clinicId,
+          p_patient_name: data.patientName,
+          p_patient_phone: data.patientPhone,
+          p_patient_age: data.patientAge || null,
+          p_patient_notes: data.patientNotes || null,
+          p_date: data.date,
+          p_time: data.time,
+          p_service: data.service,
+          p_price: data.price,
+          p_payment_method: data.paymentMethod || 'clinic',
+        });
 
-      if (error) throw error;
+        if (error) throw error;
 
-      invalidateCache();
+        invalidateCache();
 
-      // Map the RPC response (snake_case) to our camelCase format
-      return {
-        id: apt.id, doctorId: apt.doctor_id, clinicId: apt.clinic_id,
-        patientName: apt.patient_name, patientPhone: apt.patient_phone,
-        patientAge: apt.patient_age, patientNotes: apt.patient_notes,
-        date: apt.date, time: apt.time, service: apt.service, price: apt.price,
-        status: apt.status, paymentMethod: apt.payment_method,
-        createdAt: apt.created_at,
-      };
+        return {
+          id: apt.id, doctorId: apt.doctor_id, clinicId: apt.clinic_id,
+          patientName: apt.patient_name, patientPhone: apt.patient_phone,
+          patientAge: apt.patient_age, patientNotes: apt.patient_notes,
+          date: apt.date, time: apt.time, service: apt.service, price: apt.price,
+          status: apt.status, paymentMethod: apt.payment_method,
+          createdAt: apt.created_at,
+        };
+      } catch (rpcError) {
+        // RPC function doesn't exist — fall back to direct INSERT
+        console.warn('create_appointment RPC not available, using direct INSERT:', rpcError.message);
+        const { data: apt, error: insertError } = await _sb.from('appointments').insert({
+          doctor_id: data.doctorId,
+          clinic_id: data.clinicId,
+          patient_name: data.patientName,
+          patient_phone: data.patientPhone,
+          patient_age: data.patientAge || null,
+          patient_notes: data.patientNotes || null,
+          date: data.date,
+          time: data.time,
+          service: data.service,
+          price: data.price,
+          status: 'confirmed',
+          payment_method: data.paymentMethod || 'clinic',
+        }).select().single();
+
+        if (insertError) throw insertError;
+        invalidateCache();
+
+        // Try to create reminder (non-critical)
+        try {
+          const doctor = await getDoctor(data.doctorId);
+          const clinic = await getClinic(data.clinicId);
+          await _sb.from('reminders').insert({
+            appointment_id: apt.id,
+            patient_name: data.patientName,
+            patient_phone: data.patientPhone,
+            doctor_name: doctor ? doctor.name : '',
+            clinic_name: clinic ? clinic.name : '',
+            date: data.date,
+            time: data.time,
+          });
+        } catch (e) { /* reminder is non-critical */ }
+
+        return mapBooking(apt);
+      }
     }
     const db = loadLocal();
     const booking = { id: 'b' + db.nextBookingId, ...data, status: 'confirmed', paymentMethod: data.paymentMethod || 'clinic', createdAt: new Date().toISOString() };
@@ -308,6 +344,85 @@ const SahatnaDB = (function () {
 
   async function getBookingsByClinic(clinicId) { return (await load()).bookings.filter((b) => b.clinicId === clinicId).sort((a, b) => (a.date + a.time > b.date + b.time ? 1 : -1)); }
   async function getBookingsByDoctor(doctorId) { return (await load()).bookings.filter((b) => b.doctorId === doctorId).sort((a, b) => (a.date + a.time > b.date + b.time ? 1 : -1)); }
+
+  // ---- Patient: My Bookings ----
+  async function getBookingsByPhone(phone) {
+    const cleanPhone = phone.replace(/[\s\-]/g, '');
+    if (isSupabase()) {
+      const { data, error } = await _sb.rpc('get_patient_bookings', { p_phone: cleanPhone });
+      if (error) {
+        console.error('get_patient_bookings error:', error);
+        const res = await _sb.from('appointments').select('*').eq('patient_phone', cleanPhone);
+        return (res.data || []).map(mapBooking).sort((a, b) => (b.date + b.time > a.date + a.time ? 1 : -1));
+      }
+      return (data || []).map(mapBooking);
+    }
+    const db = await load();
+    return db.bookings
+      .filter((b) => b.patientPhone === cleanPhone || b.patientPhone === phone)
+      .sort((a, b) => (b.date + b.time > a.date + a.time ? 1 : -1));
+  }
+
+  async function cancelBooking(bookingId) {
+    if (isSupabase()) {
+      const { data, error } = await _sb.from('appointments')
+        .update({ status: 'cancelled' })
+        .eq('id', bookingId)
+        .select().single();
+      if (error) throw error;
+      invalidateCache();
+      return mapBooking(data);
+    }
+    const db = loadLocal();
+    const b = db.bookings.find((x) => x.id === bookingId);
+    if (b) { b.status = 'cancelled'; saveLocal(db); }
+    return b;
+  }
+
+  async function addReview(data) {
+    if (isSupabase()) {
+      const { data: review, error } = await _sb.from('reviews').insert({
+        doctor_id: data.doctorId,
+        appointment_id: data.appointmentId || null,
+        patient_name: data.patientName,
+        patient_phone: data.patientPhone,
+        rating: data.rating,
+        comment: data.comment || '',
+        verified: true,
+      }).select().single();
+      if (error) throw error;
+      invalidateCache();
+      return mapReview(review);
+    }
+    const db = loadLocal();
+    const review = {
+      id: 'r' + (db.reviews.length + 1),
+      doctorId: data.doctorId,
+      appointmentId: data.appointmentId || null,
+      patientName: data.patientName,
+      patientPhone: data.patientPhone,
+      rating: data.rating,
+      comment: data.comment || '',
+      date: new Date().toISOString().slice(0, 10),
+      verified: true,
+    };
+    db.reviews.push(review);
+    // Update doctor's rating
+    const doctor = db.doctors.find((d) => d.id === data.doctorId);
+    if (doctor) {
+      const docReviews = db.reviews.filter((r) => r.doctorId === data.doctorId);
+      const sum = docReviews.reduce((s, r) => s + r.rating, 0);
+      doctor.rating = Math.round((sum / docReviews.length) * 10) / 10;
+      doctor.reviewsCount = docReviews.length;
+    }
+    saveLocal(db);
+    return review;
+  }
+
+  async function hasReviewed(bookingId) {
+    const db = await load();
+    return db.reviews.some((r) => r.appointmentId === bookingId);
+  }
 
   async function updateSchedule(doctorId, slots, slotDuration) {
     if (isSupabase()) {
@@ -431,6 +546,17 @@ const SahatnaDB = (function () {
     saveLocal(db); return true;
   }
 
+  async function updateDoctor(doctorId, updates) {
+    if (isSupabase()) {
+      const { data, error } = await _sb.from('doctors').update(updates).eq('id', doctorId).select().single();
+      if (error) throw error; invalidateCache(); return mapDoctor(data);
+    }
+    const db = loadLocal();
+    const d = db.doctors.find((x) => x.id === doctorId);
+    if (d) { Object.assign(d, updates); saveLocal(db); }
+    return d;
+  }
+
   async function clinicLogin(username, password) {
     if (isSupabase()) {
       const email = `${username}@sahatna.app`;
@@ -532,7 +658,8 @@ const SahatnaDB = (function () {
     getAvailableSlots, getAvailableDays, formatTime, getDayName, getMonthName,
     createBooking, updateBookingStatus, getBookingsByClinic, getBookingsByDoctor,
     updateSchedule, approveClinic, rejectClinic, activateClinic, addClinic,
-    addDoctor, deleteDoctor, clinicLogin, adminLogin, signOut,
+    addDoctor, deleteDoctor, updateDoctor, clinicLogin, adminLogin, signOut,
     getPendingReminders, markReminderSent, getStats, logAudit,
+    getBookingsByPhone, cancelBooking, addReview, hasReviewed,
   };
 })();

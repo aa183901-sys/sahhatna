@@ -12,6 +12,7 @@
 --
 -- NOTE: In production, replace the hardcoded key with a call to
 --       vault.decrypted_secrets where the key is stored securely.
+--       → شغّل supabase-vault-migration.sql لاستبدال المفتاح بـ Vault
 -- ============================================================
 
 CREATE EXTENSION IF NOT EXISTS "pgcrypto";

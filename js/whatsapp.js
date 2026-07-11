@@ -10,12 +10,10 @@
 
 const WhatsAppReminder = {
   /**
-   * Resolve the shared API (SahatnaAPI if loaded, otherwise SahatnaDB).
-   * clinic.html loads data.js (SahatnaDB) but not db.js (SahatnaAPI),
-   * so we fall back to SahatnaDB to avoid ReferenceError.
+   * Resolve the data layer (SahatnaDB).
+   * All pages load js/data.js which defines SahatnaDB.
    */
   _api() {
-    if (typeof SahatnaAPI !== 'undefined' && SahatnaAPI) return SahatnaAPI;
     if (typeof SahatnaDB !== 'undefined' && SahatnaDB) return SahatnaDB;
     return null;
   },

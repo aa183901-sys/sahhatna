@@ -1,4 +1,4 @@
-/ **
+/**
  * صحتنا - Clinic Dashboard Logic
  * Handles clinic login, bookings, calendar, doctors, schedule, and reminders.
  * All SahatnaDB calls are async (Supabase or localStorage).
@@ -33,12 +33,13 @@ function getStatusBadge(status) {
     confirmed: '<span class="badge badge-info">مؤكد</span>',
     completed: '<span class="badge badge-success">مكتمل</span>',
     cancelled: '<span class="badge badge-danger">ملغي</span>',
+    no_show: '<span class="badge badge-warning">لم يحضر</span>',
   };
   return badges[status] || badges.confirmed;
 }
 
 function getStatusLabel(status) {
-  const labels = { confirmed: 'مؤكد', completed: 'مكتمل', cancelled: 'ملغي' };
+  const labels = { confirmed: 'مؤكد', completed: 'مكتمل', cancelled: 'ملغي', no_show: 'لم يحضر' };
   return labels[status] || status;
 }
 
@@ -140,6 +141,148 @@ function switchTab(tabName) {
   if (tabName === 'calendar') renderCalendar();
   if (tabName === 'schedule') loadDoctorSchedule();
   if (tabName === 'reminders') renderReminders();
+  if (tabName === 'analytics') renderClinicAnalytics();
+}
+
+// ---- Analytics & Charts -------------------------------------------------
+let revenueChartInstance = null;
+let statusChartInstance = null;
+let doctorChartInstance = null;
+
+async function renderClinicAnalytics() {
+  const bookings = await SahatnaDB.getBookingsByClinic(currentClinic.id);
+  const db = await SahatnaDB.load();
+  const doctors = db.doctors.filter((d) => d.clinicId === currentClinic.id);
+
+  // Revenue by month (last 6 months)
+  const months = [];
+  const revenueData = [];
+  const now = new Date();
+  for (let i = 5; i >= 0; i--) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    const monthKey = d.toISOString().slice(0, 7);
+    const monthName = SahatnaDB.getMonthName(d.getMonth());
+    months.push(monthName);
+    const rev = bookings
+      .filter((b) => b.status === 'completed' && b.date.startsWith(monthKey))
+      .reduce((sum, b) => sum + b.price, 0);
+    revenueData.push(rev);
+  }
+
+  // Status distribution
+  const confirmed = bookings.filter((b) => b.status === 'confirmed').length;
+  const completed = bookings.filter((b) => b.status === 'completed').length;
+  const cancelled = bookings.filter((b) => b.status === 'cancelled').length;
+
+  // Doctor bookings
+  const doctorLabels = [];
+  const doctorData = [];
+  for (const doc of doctors) {
+    const count = bookings.filter((b) => b.doctorId === doc.id).length;
+    doctorLabels.push(doc.name);
+    doctorData.push(count);
+  }
+
+  // Destroy old charts
+  if (revenueChartInstance) revenueChartInstance.destroy();
+  if (statusChartInstance) statusChartInstance.destroy();
+  if (doctorChartInstance) doctorChartInstance.destroy();
+
+  // Revenue Chart (Bar)
+  const revCtx = document.getElementById('revenueChart');
+  if (revCtx) {
+    revenueChartInstance = new Chart(revCtx, {
+      type: 'bar',
+      data: {
+        labels: months,
+        datasets: [{ label: 'الإيرادات (د.ع)', data: revenueData, backgroundColor: '#0d9488', borderRadius: 8 }],
+      },
+      options: { responsive: true, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true } } },
+    });
+  }
+
+  // Status Chart (Doughnut)
+  const statusCtx = document.getElementById('statusChart');
+  if (statusCtx) {
+    statusChartInstance = new Chart(statusCtx, {
+      type: 'doughnut',
+      data: {
+        labels: ['مؤكد', 'مكتمل', 'ملغي'],
+        datasets: [{ data: [confirmed, completed, cancelled], backgroundColor: ['#3b82f6', '#22c55e', '#ef4444'] }],
+      },
+      options: { responsive: true, plugins: { legend: { position: 'bottom' } } },
+    });
+  }
+
+  // Doctor Chart (Bar)
+  const docCtx = document.getElementById('doctorChart');
+  if (docCtx) {
+    doctorChartInstance = new Chart(docCtx, {
+      type: 'bar',
+      data: {
+        labels: doctorLabels.length > 0 ? doctorLabels : ['لا يوجد'],
+        datasets: [{ label: 'عدد الحجوزات', data: doctorData.length > 0 ? doctorData : [0], backgroundColor: '#14b8a6', borderRadius: 8 }],
+      },
+      options: { responsive: true, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true } } },
+    });
+  }
+
+  // Summary
+  const totalRevenue = bookings.filter((b) => b.status === 'completed').reduce((s, b) => s + b.price, 0);
+  const uniquePatients = new Set(bookings.map((b) => b.patientPhone)).size;
+  const summary = document.getElementById('clinicSummary');
+  if (summary) {
+    summary.innerHTML = `
+      <div><p class="text-3xl font-bold text-primary">${formatPrice(totalRevenue)}</p><p class="text-sm text-gray-400">إجمالي الإيرادات</p></div>
+      <div><p class="text-3xl font-bold text-info">${bookings.length}</p><p class="text-sm text-gray-400">إجمالي الحجوزات</p></div>
+      <div><p class="text-3xl font-bold text-success">${uniquePatients}</p><p class="text-sm text-gray-400">مرضى فريدون</p></div>
+      <div><p class="text-3xl font-bold text-warning">${doctors.length}</p><p class="text-sm text-gray-400">أطباء</p></div>
+    `;
+  }
+}
+
+// ---- Export CSV ----------------------------------------------------------
+async function exportBookingsCSV() {
+  const bookings = await SahatnaDB.getBookingsByClinic(currentClinic.id);
+  const db = await SahatnaDB.load();
+
+  if (bookings.length === 0) {
+    showToast('لا توجد حجوزات للتصدير', 'info');
+    return;
+  }
+
+  const headers = ['رقم الحجز', 'اسم المريض', 'الهاتف', 'الطبيب', 'التخصص', 'التاريخ', 'الوقت', 'الخدمة', 'السعر', 'الحالة'];
+  const rows = bookings.map((b) => {
+    const doctor = db.doctors.find((d) => d.id === b.doctorId);
+    const specialty = doctor ? db.specialties.find((s) => s.id === doctor.specialtyId) : null;
+    const timeParts = b.time.split(':').map(Number);
+    return [
+      b.id,
+      b.patientName,
+      b.patientPhone,
+      doctor ? doctor.name : '',
+      specialty ? specialty.name : '',
+      b.date,
+      SahatnaDB.formatTime(timeParts[0], timeParts[1]),
+      getServiceLabel(b.service),
+      b.price,
+      getStatusLabel(b.status),
+    ];
+  });
+
+  const csv = [headers, ...rows]
+    .map((row) => row.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(','))
+    .join('\n');
+
+  const bom = '\uFEFF';
+  const blob = new Blob([bom + csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = `حجوزات_${currentClinic.name}_${new Date().toISOString().slice(0, 10)}.csv`;
+  link.click();
+  URL.revokeObjectURL(url);
+  showToast('تم تصدير الحجوزات بنجاح', 'success');
 }
 
 // ---- Bookings List -------------------------------------------------------
@@ -205,11 +348,13 @@ async function renderBookingsList() {
               ${b.status === 'confirmed'
                 ? `
                 <button onclick="updateBookingStatus('${b.id}', 'completed')" class="btn-success text-xs">✓ إكمال</button>
+                <button onclick="updateBookingStatus('${b.id}', 'no_show')" class="btn-secondary text-xs">🚫 لم يحضر</button>
                 <button onclick="cancelBooking('${b.id}')" class="btn-danger text-xs">✕ إلغاء</button>
               `
                 : ''}
               ${b.status === 'completed' ? `<span class="text-xs text-success font-semibold">✓ تمت الزيارة</span>` : ''}
               ${b.status === 'cancelled' ? `<span class="text-xs text-danger font-semibold">✕ ملغي</span>` : ''}
+              ${b.status === 'no_show' ? `<span class="text-xs text-warning font-semibold">🚫 لم يحضر</span>` : ''}
             </div>
           </div>
         </div>
