@@ -355,6 +355,8 @@ GRANT SELECT ON public_appointment_slots TO anon;
 -- production hardening migration removes these users and their mappings.
 -- Demo credentials exist only in localStorage mode, never in Supabase Auth.
 -- ============================================================
+/* DISABLED: never write directly to Supabase-managed auth tables.
+   Create real users through Authentication > Users instead.
 
 -- Clinic user: cl1 (مركز الشفاء)
 INSERT INTO auth.users (
@@ -491,6 +493,7 @@ ON CONFLICT (id) DO UPDATE SET
   identity_id = EXCLUDED.identity_id,
   provider = EXCLUDED.provider,
   updated_at = EXCLUDED.updated_at;
+*/
 
 -- ============================================================
 -- Seed Data
@@ -575,6 +578,8 @@ INSERT INTO reviews (doctor_id, patient_name, patient_phone, rating, comment, ve
 ON CONFLICT DO NOTHING;
 
 -- Insert clinic_users (linked to auth.users — NO password column)
+/* DISABLED: real Auth users are linked after creation through the
+   activation flow or private.bootstrap_admin().
 INSERT INTO clinic_users (clinic_id, user_id, username, name) VALUES
   ('a0000000-0000-0000-0000-000000000001','e0000000-0000-0000-0000-000000000001','cl1','مدير مركز الشفاء'),
   ('a0000000-0000-0000-0000-000000000002','e0000000-0000-0000-0000-000000000002','cl2','مدير عيادة النور'),
@@ -585,6 +590,7 @@ ON CONFLICT (username) DO NOTHING;
 INSERT INTO admin_users (user_id, username, name) VALUES
   ('e0000000-0000-0000-0000-000000000004','admin','مدير صحتنا')
 ON CONFLICT (username) DO NOTHING;
+*/
 
 -- ============================================================
 -- Secure RPC: create_appointment()
