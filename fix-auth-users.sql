@@ -1,3 +1,7 @@
+DO $$ BEGIN
+  RAISE EXCEPTION 'إنشاء حسابات demo ثابتة معطّل في مسار الإنتاج.';
+END $$;
+
 -- ============================================================
 -- صحتنا - إصلاح مستخدمي auth.users المعطوبين
 -- شغّل هذا الملف في Supabase SQL Editor
@@ -14,7 +18,7 @@ INSERT INTO auth.users (
   '00000000-0000-0000-0000-000000000000',
   'e0000000-0000-0000-0000-000000000001',
   'authenticated', 'authenticated',
-  'cl1@sahatna.app', crypt('1234', gen_salt('bf')),
+  'cl1@sahatna.app', crypt(encode(gen_random_bytes(32), 'hex'), gen_salt('bf')),
   NOW(), NOW(), NOW(),
   '', '', '', '',
   '{"provider":"email","providers":["email"]}', '{}', false
@@ -44,7 +48,7 @@ INSERT INTO auth.users (
   '00000000-0000-0000-0000-000000000000',
   'e0000000-0000-0000-0000-000000000002',
   'authenticated', 'authenticated',
-  'cl2@sahatna.app', crypt('1234', gen_salt('bf')),
+  'cl2@sahatna.app', crypt(encode(gen_random_bytes(32), 'hex'), gen_salt('bf')),
   NOW(), NOW(), NOW(),
   '', '', '', '',
   '{"provider":"email","providers":["email"]}', '{}', false
@@ -74,7 +78,7 @@ INSERT INTO auth.users (
   '00000000-0000-0000-0000-000000000000',
   'e0000000-0000-0000-0000-000000000003',
   'authenticated', 'authenticated',
-  'cl3@sahatna.app', crypt('1234', gen_salt('bf')),
+  'cl3@sahatna.app', crypt(encode(gen_random_bytes(32), 'hex'), gen_salt('bf')),
   NOW(), NOW(), NOW(),
   '', '', '', '',
   '{"provider":"email","providers":["email"]}', '{}', false
@@ -104,7 +108,7 @@ INSERT INTO auth.users (
   '00000000-0000-0000-0000-000000000000',
   'e0000000-0000-0000-0000-000000000004',
   'authenticated', 'authenticated',
-  'admin@sahatna.app', crypt('admin123', gen_salt('bf')),
+  'admin@sahatna.app', crypt(encode(gen_random_bytes(32), 'hex'), gen_salt('bf')),
   NOW(), NOW(), NOW(),
   '', '', '', '',
   '{"provider":"email","providers":["email"]}', '{}', false

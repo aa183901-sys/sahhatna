@@ -23,6 +23,7 @@ async function handleActivate(event) {
   const clinicName = document.getElementById('activateClinicName').value.trim();
   const activationCode = document.getElementById('activateCode').value.trim().toUpperCase();
   const username = document.getElementById('activateUsername').value.trim().toLowerCase();
+  const email = document.getElementById('activateEmail').value.trim().toLowerCase();
   const password = document.getElementById('activatePassword').value;
   const passwordConfirm = document.getElementById('activatePasswordConfirm').value;
 
@@ -37,8 +38,8 @@ async function handleActivate(event) {
     return;
   }
 
-  if (password.length < 6) {
-    showToast('كلمة المرور يجب أن تكون 6 محارف على الأقل', 'error');
+  if (password.length < 8) {
+    showToast('كلمة المرور يجب أن تكون 8 محارف على الأقل', 'error');
     return;
   }
 
@@ -58,7 +59,7 @@ async function handleActivate(event) {
   btn.textContent = 'جاري التفعيل...';
 
   try {
-    const result = await SahatnaDB.activateClinic(clinicName, activationCode, username, password);
+    const result = await SahatnaDB.activateClinic(clinicName, activationCode, username, email, password);
     showToast(`تم تفعيل حسابك بنجاح! مرحباً بك في ${result.clinic.name}`, 'success');
     // Redirect to clinic login page after short delay
     setTimeout(() => {

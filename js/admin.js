@@ -6,6 +6,14 @@
 
 let currentAdmin = null;
 
+const escapeHTML = (value) => SahatnaDB.escapeHTML(value);
+const safeImageURL = (value) => SahatnaDB.safeImageURL(value);
+const escapeCSVCell = (value) => {
+  let text = String(value == null ? '' : value);
+  if (/^[=+\-@]/.test(text)) text = "'" + text;
+  return `"${text.replace(/"/g, '""')}"`;
+};
+
 function showToast(message, type = 'success') {
   const container = document.getElementById('toastContainer');
   const toast = document.createElement('div');
@@ -36,14 +44,19 @@ async function handleAdminLogin(event) {
   event.preventDefault();
   const username = document.getElementById('adminUsername').value.trim();
   const password = document.getElementById('adminPassword').value.trim();
-  const admin = await SahatnaDB.adminLogin(username, password);
-  if (admin) {
-    currentAdmin = admin;
-    sessionStorage.setItem('sahatna_admin', JSON.stringify({ username: admin.username }));
-    showAdminDashboard();
-    showToast('تم تسجيل الدخول بنجاح', 'success');
-  } else {
-    showToast('اسم المستخدم أو كلمة المرور غير صحيحة', 'error');
+  try {
+    const admin = await SahatnaDB.adminLogin(username, password);
+    if (admin) {
+      currentAdmin = admin;
+      sessionStorage.setItem('sahatna_admin', JSON.stringify({ username: admin.username }));
+      await showAdminDashboard();
+      showToast('تم تسجيل الدخول بنجاح', 'success');
+    } else {
+      showToast('اسم المستخدم أو كلمة المرور غير صحيحة', 'error');
+    }
+  } catch (error) {
+    console.error('Admin login failed:', error);
+    showToast('تعذر الاتصال بخدمة تسجيل الدخول', 'error');
   }
 }
 
@@ -57,12 +70,23 @@ async function adminLogout() {
 }
 
 async function checkAdminSession() {
+  if (SahatnaDB.isSupabaseEnabled()) {
+    const admin = await SahatnaDB.getCurrentAdmin();
+    if (admin) {
+      currentAdmin = admin;
+      sessionStorage.setItem('sahatna_admin', JSON.stringify({ username: admin.username }));
+      await showAdminDashboard();
+    } else {
+      sessionStorage.removeItem('sahatna_admin');
+    }
+    return;
+  }
   const saved = sessionStorage.getItem('sahatna_admin');
   if (saved) {
     try {
       const { username } = JSON.parse(saved);
       currentAdmin = { username, name: 'مدير صحتنا' };
-      showAdminDashboard();
+      await showAdminDashboard();
     } catch (e) {
       console.error('Admin session restore error:', e);
       sessionStorage.removeItem('sahatna_admin');
@@ -122,13 +146,13 @@ async function renderAdminClinics() {
         <div class="flex items-start justify-between gap-3 flex-wrap">
           <div class="flex-1 min-w-0">
             <div class="flex items-center gap-2 mb-1">
-              <h4 class="font-bold text-gray-800">${clinic.name}</h4>
+              <h4 class="font-bold text-gray-800">${escapeHTML(clinic.name)}</h4>
               ${getClinicStatusBadge(clinic.status)}
             </div>
             <div class="text-sm text-gray-500 space-y-1">
-              <p>📍 ${clinic.area}، ${city ? city.name : ''}</p>
-              <p>🏠 ${clinic.address}</p>
-              <p>📞 ${clinic.phone}</p>
+              <p>📍 ${escapeHTML(clinic.area)}، ${escapeHTML(city ? city.name : '')}</p>
+              <p>🏠 ${escapeHTML(clinic.address)}</p>
+              <p>📞 ${escapeHTML(clinic.phone)}</p>
               <p>📅 تاريخ التسجيل: ${created}</p>
               <p>👨‍⚕️ ${doctors.length} طبيب • 📅 ${bookings.length} حجز</p>
             </div>
@@ -150,7 +174,6 @@ async function renderAdminClinics() {
 
 async function approveClinic(clinicId) {
   const clinic = await SahatnaDB.approveClinic(clinicId);
-  await SahatnaDB.logAudit('clinic.approve', 'clinics', clinicId, { name: clinic.name, activation_code_generated: true });
   await renderAdminClinics();
   await renderAdminStats();
   const code = clinic.activationCode || clinic.activation_code;
@@ -161,7 +184,6 @@ async function approveClinic(clinicId) {
 async function rejectClinic(clinicId) {
   if (confirm('هل أنت متأكد من رفض/إيقاف هذه العيادة؟')) {
     await SahatnaDB.rejectClinic(clinicId);
-    await SahatnaDB.logAudit('clinic.reject', 'clinics', clinicId, {});
     await renderAdminClinics();
     await renderAdminStats();
     showToast('تم رفض/إيقاف العيادة', 'info');
@@ -182,15 +204,15 @@ async function renderAdminDoctors() {
     cards.push(`
       <div class="border border-gray-200 rounded-2xl p-4 bg-white">
         <div class="flex gap-3">
-          <img src="${d.photo}" class="w-16 h-16 rounded-xl object-cover" />
+          <img src="${safeImageURL(d.photo)}" class="w-16 h-16 rounded-xl object-cover" />
           <div class="flex-1">
             <div class="flex items-center gap-2">
-              <h4 class="font-bold text-gray-800">${d.name}</h4>
+              <h4 class="font-bold text-gray-800">${escapeHTML(d.name)}</h4>
               ${d.verified ? '<span class="verified-badge">✓</span>' : ''}
               ${d.featured ? '<span class="badge badge-warning text-xs">مميز</span>' : ''}
             </div>
-            <p class="text-sm text-primary">${specialty ? specialty.name : ''}</p>
-            <p class="text-xs text-gray-500 mt-1">📍 ${clinic ? clinic.name : ''} - ${city ? city.name : ''}</p>
+            <p class="text-sm text-primary">${escapeHTML(specialty ? specialty.name : '')}</p>
+            <p class="text-xs text-gray-500 mt-1">📍 ${escapeHTML(clinic ? clinic.name : '')} - ${escapeHTML(city ? city.name : '')}</p>
           </div>
         </div>
         <div class="grid grid-cols-4 gap-2 mt-3 pt-3 border-t border-gray-100 text-center">
@@ -215,7 +237,6 @@ async function toggleDoctorVerified(doctorId) {
   const doctor = db.doctors.find((d) => d.id === doctorId);
   if (!doctor) return;
   await SahatnaDB.updateDoctor(doctorId, { verified: !doctor.verified });
-  await SahatnaDB.logAudit('doctor.toggle_verified', 'doctors', doctorId, { verified: !doctor.verified });
   await renderAdminDoctors();
   showToast(doctor.verified ? 'تم إلغاء توثيق الطبيب' : 'تم توثيق الطبيب', 'success');
 }
@@ -225,7 +246,6 @@ async function toggleDoctorFeatured(doctorId) {
   const doctor = db.doctors.find((d) => d.id === doctorId);
   if (!doctor) return;
   await SahatnaDB.updateDoctor(doctorId, { featured: !doctor.featured });
-  await SahatnaDB.logAudit('doctor.toggle_featured', 'doctors', doctorId, { featured: !doctor.featured });
   await renderAdminDoctors();
   showToast(doctor.featured ? 'تم إلغاء تمييز الطبيب' : 'تم تمييز الطبيب', 'success');
 }
@@ -243,7 +263,7 @@ async function exportAllBookingsCSV() {
     const timeParts = b.time.split(':').map(Number);
     return [b.id, b.patientName, b.patientPhone, doctor ? doctor.name : '', specialty ? specialty.name : '', clinic ? clinic.name : '', city ? city.name : '', b.date, SahatnaDB.formatTime(timeParts[0], timeParts[1]), b.service, b.price, b.status];
   });
-  const csv = [headers, ...rows].map((row) => row.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(',')).join('\n');
+  const csv = [headers, ...rows].map((row) => row.map(escapeCSVCell).join(',')).join('\n');
   const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
   const url = URL.createObjectURL(blob);
   const link = document.createElement('a');
@@ -270,14 +290,14 @@ async function renderAdminBookings() {
         <div class="flex items-start justify-between gap-3 flex-wrap">
           <div class="flex-1 min-w-0">
             <div class="flex items-center gap-2 mb-1">
-              <span class="font-bold text-gray-800">${b.patientName}</span>
+              <span class="font-bold text-gray-800">${escapeHTML(b.patientName)}</span>
               ${getBookingStatusBadge(b.status)}
             </div>
             <div class="text-sm text-gray-500 space-y-1">
-              <p>👨‍⚕️ ${doctor ? doctor.name : ''} - ${specialty ? specialty.name : ''}</p>
-              <p>🏥 ${clinic ? clinic.name : ''}</p>
+              <p>👨‍⚕️ ${escapeHTML(doctor ? doctor.name : '')} - ${escapeHTML(specialty ? specialty.name : '')}</p>
+              <p>🏥 ${escapeHTML(clinic ? clinic.name : '')}</p>
               <p>📅 ${dayName} ${b.date} • ⏰ ${SahatnaDB.formatTime(timeParts[0], timeParts[1])}</p>
-              <p>📞 ${b.patientPhone} • 💰 ${formatPrice(b.price)}</p>
+              <p>📞 ${escapeHTML(b.patientPhone)} • 💰 ${formatPrice(b.price)}</p>
             </div>
           </div>
         </div>
@@ -291,7 +311,7 @@ async function renderAdminSpecialties() {
   const list = document.getElementById('adminSpecialtiesList');
   list.innerHTML = db.specialties.map((sp) => {
     const count = db.doctors.filter((d) => d.specialtyId === sp.id).length;
-    return `<div class="flex items-center justify-between bg-gray-50 rounded-lg p-3 border border-gray-200"><div class="flex items-center gap-3"><span class="text-2xl">${sp.icon}</span><div><p class="font-semibold text-gray-700">${sp.name}</p><p class="text-xs text-gray-400">${sp.nameEn}</p></div></div><span class="badge badge-primary">${count} طبيب</span></div>`;
+    return `<div class="flex items-center justify-between bg-gray-50 rounded-lg p-3 border border-gray-200"><div class="flex items-center gap-3"><span class="text-2xl">${escapeHTML(sp.icon)}</span><div><p class="font-semibold text-gray-700">${escapeHTML(sp.name)}</p><p class="text-xs text-gray-400">${escapeHTML(sp.nameEn)}</p></div></div><span class="badge badge-primary">${count} طبيب</span></div>`;
   }).join('');
 }
 
@@ -300,7 +320,7 @@ async function renderAdminCities() {
   const list = document.getElementById('adminCitiesList');
   list.innerHTML = db.cities.map((city) => {
     const clinics = db.clinics.filter((c) => c.cityId === city.id && c.status === 'approved').length;
-    return `<div class="flex items-center justify-between bg-gray-50 rounded-lg p-3 border border-gray-200"><div class="flex items-center gap-3"><span class="text-2xl">📍</span><p class="font-semibold text-gray-700">${city.name}</p></div><span class="badge badge-primary">${clinics} عيادة</span></div>`;
+    return `<div class="flex items-center justify-between bg-gray-50 rounded-lg p-3 border border-gray-200"><div class="flex items-center gap-3"><span class="text-2xl">📍</span><p class="font-semibold text-gray-700">${escapeHTML(city.name)}</p></div><span class="badge badge-primary">${clinics} عيادة</span></div>`;
   }).join('');
 }
 
@@ -336,19 +356,19 @@ async function renderAdminAnalytics() {
     <div class="stat-card">
       <h4 class="font-bold text-gray-800 mb-4">أكثر التخصصات طلباً</h4>
       <div class="space-y-3">
-        ${specialtyStats.slice(0, 5).map((sp) => { const pct = (sp.bookings / maxSpBookings) * 100; return `<div><div class="flex items-center justify-between mb-1"><span class="text-sm font-semibold">${sp.icon} ${sp.name}</span><span class="text-sm text-gray-500">${sp.bookings} حجز</span></div><div class="w-full bg-gray-100 rounded-full h-2"><div class="bg-primary h-2 rounded-full transition-all" style="width: ${pct}%"></div></div></div>`; }).join('')}
+        ${specialtyStats.slice(0, 5).map((sp) => { const pct = (sp.bookings / maxSpBookings) * 100; return `<div><div class="flex items-center justify-between mb-1"><span class="text-sm font-semibold">${escapeHTML(sp.icon)} ${escapeHTML(sp.name)}</span><span class="text-sm text-gray-500">${sp.bookings} حجز</span></div><div class="w-full bg-gray-100 rounded-full h-2"><div class="bg-primary h-2 rounded-full transition-all" style="width: ${pct}%"></div></div></div>`; }).join('')}
       </div>
     </div>
     <div class="stat-card">
       <h4 class="font-bold text-gray-800 mb-4">أكثر الأطباء حجوزاً</h4>
       <div class="space-y-3">
-        ${doctorStats.slice(0, 5).map((d) => { const pct = (d.totalBookings / maxDocBookings) * 100; return `<div><div class="flex items-center justify-between mb-1"><span class="text-sm font-semibold">👨‍⚕️ ${d.name}</span><span class="text-sm text-gray-500">${d.totalBookings} حجز • ${formatPrice(d.revenue)}</span></div><div class="w-full bg-gray-100 rounded-full h-2"><div class="bg-success h-2 rounded-full transition-all" style="width: ${pct}%"></div></div></div>`; }).join('')}
+        ${doctorStats.slice(0, 5).map((d) => { const pct = (d.totalBookings / maxDocBookings) * 100; return `<div><div class="flex items-center justify-between mb-1"><span class="text-sm font-semibold">👨‍⚕️ ${escapeHTML(d.name)}</span><span class="text-sm text-gray-500">${d.totalBookings} حجز • ${formatPrice(d.revenue)}</span></div><div class="w-full bg-gray-100 rounded-full h-2"><div class="bg-success h-2 rounded-full transition-all" style="width: ${pct}%"></div></div></div>`; }).join('')}
       </div>
     </div>
     <div class="stat-card">
       <h4 class="font-bold text-gray-800 mb-4">أكثر العيادات نشاطاً</h4>
       <div class="space-y-3">
-        ${clinicStats.slice(0, 5).map((c) => { const pct = (c.totalBookings / maxClinicBookings) * 100; const city = db.cities.find((ci) => ci.id === c.cityId); return `<div><div class="flex items-center justify-between mb-1"><span class="text-sm font-semibold">🏥 ${c.name} - ${city ? city.name : ''}</span><span class="text-sm text-gray-500">${c.totalBookings} حجز • ${formatPrice(c.revenue)}</span></div><div class="w-full bg-gray-100 rounded-full h-2"><div class="bg-info h-2 rounded-full transition-all" style="width: ${pct}%"></div></div></div>`; }).join('')}
+        ${clinicStats.slice(0, 5).map((c) => { const pct = (c.totalBookings / maxClinicBookings) * 100; const city = db.cities.find((ci) => ci.id === c.cityId); return `<div><div class="flex items-center justify-between mb-1"><span class="text-sm font-semibold">🏥 ${escapeHTML(c.name)} - ${escapeHTML(city ? city.name : '')}</span><span class="text-sm text-gray-500">${c.totalBookings} حجز • ${formatPrice(c.revenue)}</span></div><div class="w-full bg-gray-100 rounded-full h-2"><div class="bg-info h-2 rounded-full transition-all" style="width: ${pct}%"></div></div></div>`; }).join('')}
       </div>
     </div>
     <div class="stat-card">
@@ -363,4 +383,12 @@ async function renderAdminAnalytics() {
   `;
 }
 
-document.addEventListener('DOMContentLoaded', checkAdminSession);
+document.addEventListener('DOMContentLoaded', () => {
+  if (SahatnaDB.isSupabaseEnabled()) {
+    document.getElementById('adminDemoCredentials')?.classList.add('hidden');
+  }
+  checkAdminSession().catch((error) => {
+    console.error('Admin session check failed:', error);
+    showToast('تعذر التحقق من جلسة الإدارة', 'error');
+  });
+});

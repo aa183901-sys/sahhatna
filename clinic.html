@@ -48,18 +48,18 @@
 
       <form onsubmit="handleClinicLogin(event)" class="space-y-4">
         <div>
-          <label class="block text-sm font-semibold text-gray-600 mb-1">اسم المستخدم</label>
-          <input type="text" id="loginUsername" required placeholder="مثال: cl1" class="form-input" />
+          <label class="block text-sm font-semibold text-gray-600 mb-1">البريد الإلكتروني أو اسم مستخدم العرض</label>
+          <input type="text" id="loginUsername" required autocomplete="username" placeholder="clinic@example.com" class="form-input" />
         </div>
         <div>
           <label class="block text-sm font-semibold text-gray-600 mb-1">كلمة المرور</label>
-          <input type="password" id="loginPassword" required placeholder="••••" class="form-input" />
+          <input type="password" id="loginPassword" required autocomplete="current-password" placeholder="••••" class="form-input" />
         </div>
         <button type="submit" class="btn-primary w-full">تسجيل الدخول</button>
       </form>
 
       <!-- Demo credentials -->
-      <div class="mt-6 bg-info-light rounded-xl p-4 text-sm">
+      <div id="clinicDemoCredentials" class="mt-6 bg-info-light rounded-xl p-4 text-sm">
         <p class="font-semibold text-info mb-2">🔑 حسابات تجريبية:</p>
         <div class="space-y-1 text-gray-600">
           <p>• مركز الشفاء: <code class="bg-white px-2 py-0.5 rounded">cl1 / 1234</code></p>
@@ -322,6 +322,7 @@
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 
   <!-- Scripts -->
+  <script src="js/runtime-config.js"></script>
   <script src="js/supabase-config.js"></script>
   <script src="js/data.js"></script>
   <script src="js/whatsapp.js"></script>

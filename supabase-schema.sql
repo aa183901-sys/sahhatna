@@ -1,5 +1,5 @@
- ============================================================
--- صحتنا (Sahatna) - Supa--base Database Schema (Secure)
+-- ============================================================
+-- صحتنا (Sahatna) - Supabase Database Schema (Secure)
 -- Run this in Supabase SQL Editor after creating a project
 --
 -- SECURITY: Uses Supabase Auth (no plain-text passwords).
@@ -351,11 +351,12 @@ WHERE status NOT IN ('cancelled', 'no_show');
 GRANT SELECT ON public_appointment_slots TO anon;
 
 -- ============================================================
--- Demo Auth Users
--- Creates auth.users entries so demo logins work out of the box.
--- Email convention: username@sahatna.app
--- Passwords: cl1/cl2/cl3 = "1234", admin = "admin123"
+-- Legacy seed identities. Their passwords are random and unknowable; the
+-- production hardening migration removes these users and their mappings.
+-- Demo credentials exist only in localStorage mode, never in Supabase Auth.
 -- ============================================================
+/* DISABLED: never write directly to Supabase-managed auth tables.
+   Create real users through Authentication > Users instead.
 
 -- Clinic user: cl1 (مركز الشفاء)
 INSERT INTO auth.users (
@@ -367,7 +368,7 @@ INSERT INTO auth.users (
   '00000000-0000-0000-0000-000000000000',
   'e0000000-0000-0000-0000-000000000001',
   'authenticated', 'authenticated',
-  'cl1@sahatna.app', crypt('1234', gen_salt('bf')),
+  'cl1@sahatna.app', crypt(encode(gen_random_bytes(32), 'hex'), gen_salt('bf')),
   NOW(), NOW(), NOW(),
   '', '', '', '',
   '{"provider":"email","providers":["email"]}', '{}', false
@@ -397,7 +398,7 @@ INSERT INTO auth.users (
   '00000000-0000-0000-0000-000000000000',
   'e0000000-0000-0000-0000-000000000002',
   'authenticated', 'authenticated',
-  'cl2@sahatna.app', crypt('1234', gen_salt('bf')),
+  'cl2@sahatna.app', crypt(encode(gen_random_bytes(32), 'hex'), gen_salt('bf')),
   NOW(), NOW(), NOW(),
   '', '', '', '',
   '{"provider":"email","providers":["email"]}', '{}', false
@@ -427,7 +428,7 @@ INSERT INTO auth.users (
   '00000000-0000-0000-0000-000000000000',
   'e0000000-0000-0000-0000-000000000003',
   'authenticated', 'authenticated',
-  'cl3@sahatna.app', crypt('1234', gen_salt('bf')),
+  'cl3@sahatna.app', crypt(encode(gen_random_bytes(32), 'hex'), gen_salt('bf')),
   NOW(), NOW(), NOW(),
   '', '', '', '',
   '{"provider":"email","providers":["email"]}', '{}', false
@@ -457,7 +458,7 @@ INSERT INTO auth.users (
   '00000000-0000-0000-0000-000000000000',
   'e0000000-0000-0000-0000-000000000004',
   'authenticated', 'authenticated',
-  'admin@sahatna.app', crypt('admin123', gen_salt('bf')),
+  'admin@sahatna.app', crypt(encode(gen_random_bytes(32), 'hex'), gen_salt('bf')),
   NOW(), NOW(), NOW(),
   '', '', '', '',
   '{"provider":"email","providers":["email"]}', '{}', false
@@ -492,6 +493,7 @@ ON CONFLICT (id) DO UPDATE SET
   identity_id = EXCLUDED.identity_id,
   provider = EXCLUDED.provider,
   updated_at = EXCLUDED.updated_at;
+*/
 
 -- ============================================================
 -- Seed Data
@@ -576,6 +578,8 @@ INSERT INTO reviews (doctor_id, patient_name, patient_phone, rating, comment, ve
 ON CONFLICT DO NOTHING;
 
 -- Insert clinic_users (linked to auth.users — NO password column)
+/* DISABLED: real Auth users are linked after creation through the
+   activation flow or private.bootstrap_admin().
 INSERT INTO clinic_users (clinic_id, user_id, username, name) VALUES
   ('a0000000-0000-0000-0000-000000000001','e0000000-0000-0000-0000-000000000001','cl1','مدير مركز الشفاء'),
   ('a0000000-0000-0000-0000-000000000002','e0000000-0000-0000-0000-000000000002','cl2','مدير عيادة النور'),
@@ -586,6 +590,7 @@ ON CONFLICT (username) DO NOTHING;
 INSERT INTO admin_users (user_id, username, name) VALUES
   ('e0000000-0000-0000-0000-000000000004','admin','مدير صحتنا')
 ON CONFLICT (username) DO NOTHING;
+*/
 
 -- ============================================================
 -- Secure RPC: create_appointment()

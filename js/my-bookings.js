@@ -1,13 +1,17 @@
 /**
  * صحتنا - My Bookings Logic
- * Patient can view their bookings by phone number, cancel upcoming bookings,
- * and leave reviews for completed visits.
+ * Patient can view a booking using its unguessable booking ID plus phone,
+ * cancel an upcoming booking, and leave a review for a completed visit.
  */
 
 // ---- State ---------------------------------------------------------------
 let currentPhone = null;
+let currentBookingId = null;
 let allBookings = [];
 let currentFilter = 'all';
+
+const escapeHTML = (value) => SahatnaDB.escapeHTML(value);
+const safeImageURL = (value) => SahatnaDB.safeImageURL(value);
 
 // ---- Utilities -----------------------------------------------------------
 function showToast(message, type = 'success') {
@@ -57,6 +61,7 @@ function isUpcoming(booking) {
 async function handleLogin(event) {
   event.preventDefault();
   const phone = document.getElementById('loginPhone').value.trim();
+  const bookingId = document.getElementById('loginBookingId').value.trim().replace(/^#/, '');
   const cleanPhone = phone.replace(/[\s\-]/g, '');
 
   if (!/^07\d{9}$/.test(cleanPhone)) {
@@ -64,27 +69,41 @@ async function handleLogin(event) {
     return;
   }
 
+  if (!bookingId) {
+    showToast('رقم الحجز مطلوب', 'error');
+    return;
+  }
+
   currentPhone = cleanPhone;
+  currentBookingId = bookingId;
   sessionStorage.setItem('sahatna_patient_phone', cleanPhone);
+  sessionStorage.setItem('sahatna_booking_id', bookingId);
   await showBookings();
   showToast('تم تسجيل الدخول', 'success');
 }
 
 function logout() {
   sessionStorage.removeItem('sahatna_patient_phone');
+  sessionStorage.removeItem('sahatna_booking_id');
   currentPhone = null;
+  currentBookingId = null;
   allBookings = [];
   document.getElementById('bookingsSection').classList.add('hidden');
   document.getElementById('loginSection').classList.remove('hidden');
   document.getElementById('loginPhone').value = '';
+  document.getElementById('loginBookingId').value = '';
   showToast('تم تسجيل الخروج', 'info');
 }
 
 async function checkSession() {
   const saved = sessionStorage.getItem('sahatna_patient_phone');
-  if (saved) {
+  const savedBookingId = sessionStorage.getItem('sahatna_booking_id');
+  if (saved && savedBookingId) {
     currentPhone = saved;
+    currentBookingId = savedBookingId;
     await showBookings();
+  } else if (saved) {
+    document.getElementById('loginPhone').value = saved;
   }
 }
 
@@ -101,7 +120,7 @@ async function loadBookings() {
   list.innerHTML = '<div class="text-center py-8"><div class="spinner mx-auto"></div><p class="text-gray-400 mt-3">جاري تحميل الحجوزات...</p></div>';
 
   try {
-    allBookings = await SahatnaDB.getBookingsByPhone(currentPhone);
+    allBookings = await SahatnaDB.getBookingsByPhone(currentPhone, currentBookingId);
     renderStats();
     renderBookings();
   } catch (error) {
@@ -156,26 +175,26 @@ async function renderBookings() {
     const dayName = SahatnaDB.getDayName(new Date(b.date + 'T00:00:00').getDay());
     const timeParts = b.time.split(':').map(Number);
     const upcoming = isUpcoming(b);
-    const alreadyReviewed = await SahatnaDB.hasReviewed(b.id);
+    const alreadyReviewed = b.reviewed || await SahatnaDB.hasReviewed(b.id);
 
     cards.push(`
       <div class="booking-item status-${b.status} animate-fade-in">
         <div class="flex items-start justify-between gap-3 flex-wrap">
           <div class="flex-1 min-w-0">
             <div class="flex items-center gap-2 mb-2">
-              ${doctor ? `<img src="${doctor.photo}" class="w-12 h-12 rounded-xl object-cover" />` : ''}
+              ${doctor ? `<img src="${safeImageURL(doctor.photo)}" class="w-12 h-12 rounded-xl object-cover" />` : ''}
               <div>
-                <h4 class="font-bold text-gray-800">${doctor ? doctor.name : 'طبيب غير معروف'}</h4>
-                <p class="text-sm text-primary">${specialty ? specialty.name : ''}</p>
+                <h4 class="font-bold text-gray-800">${escapeHTML(doctor ? doctor.name : 'طبيب غير معروف')}</h4>
+                <p class="text-sm text-primary">${escapeHTML(specialty ? specialty.name : '')}</p>
               </div>
               ${getStatusBadge(b.status)}
             </div>
             <div class="text-sm text-gray-500 space-y-1">
               <p>📅 ${dayName} ${b.date} • ⏰ ${SahatnaDB.formatTime(timeParts[0], timeParts[1])}</p>
-              <p>🏥 ${clinic ? clinic.name : ''}</p>
-              <p>📍 ${clinic ? clinic.area : ''}</p>
+              <p>🏥 ${escapeHTML(clinic ? clinic.name : '')}</p>
+              <p>📍 ${escapeHTML(clinic ? clinic.area : '')}</p>
               <p>${getServiceIcon(b.service)} ${getServiceLabel(b.service)} • 💰 ${formatPrice(b.price)}</p>
-              ${b.patientNotes ? `<p class="text-gray-400 italic">📝 ${b.patientNotes}</p>` : ''}
+              ${b.patientNotes ? `<p class="text-gray-400 italic">📝 ${escapeHTML(b.patientNotes)}</p>` : ''}
             </div>
           </div>
           <div class="flex flex-col gap-2 flex-shrink-0">
@@ -184,7 +203,7 @@ async function renderBookings() {
               ${clinic ? `<button onclick="callClinic('${clinic.phone}')" class="btn-secondary text-xs">📞 اتصل بالعيادة</button>` : ''}
             ` : ''}
             ${b.status === 'completed' && !alreadyReviewed ? `
-              <button onclick="openReviewModal('${b.id}', '${doctor ? doctor.id : ''}', '${doctor ? doctor.name.replace(/'/g, "\\'") : ''}')" class="btn-primary text-xs">⭐ قيّم الطبيب</button>
+              <button onclick="openReviewModal('${b.id}', '${doctor ? doctor.id : ''}')" class="btn-primary text-xs">⭐ قيّم الطبيب</button>
             ` : ''}
             ${b.status === 'completed' && alreadyReviewed ? `
               <span class="text-xs text-success font-semibold">✓ تم التقييم</span>
@@ -208,7 +227,7 @@ async function cancelMyBooking(bookingId) {
   if (!confirm('هل أنت متأكد من إلغاء هذا الحجز؟\n\nملاحظة: يفضل الإلغاء قبل الموعد بـ 24 ساعة على الأقل.')) return;
 
   try {
-    await SahatnaDB.cancelBooking(bookingId);
+    await SahatnaDB.cancelBooking(bookingId, currentPhone);
     await loadBookings();
     showToast('تم إلغاء الحجز بنجاح', 'success');
   } catch (error) {
@@ -222,7 +241,9 @@ function callClinic(phone) {
 }
 
 // ---- Review Modal --------------------------------------------------------
-function openReviewModal(bookingId, doctorId, doctorName) {
+async function openReviewModal(bookingId, doctorId) {
+  const doctor = await SahatnaDB.getDoctor(doctorId);
+  const doctorName = doctor ? doctor.name : '';
   const modal = document.getElementById('reviewModal');
   modal.classList.remove('hidden');
   modal.innerHTML = `
@@ -231,7 +252,7 @@ function openReviewModal(bookingId, doctorId, doctorName) {
         <div class="bg-primary text-white p-5 rounded-t-2xl flex items-center justify-between">
           <div>
             <h3 class="text-lg font-bold">⭐ تقييم الطبيب</h3>
-            <p class="text-teal-100 text-sm mt-1">${doctorName}</p>
+            <p class="text-teal-100 text-sm mt-1">${escapeHTML(doctorName)}</p>
           </div>
           <button onclick="closeReviewModal()" class="text-white/80 hover:text-white text-2xl">✕</button>
         </div>

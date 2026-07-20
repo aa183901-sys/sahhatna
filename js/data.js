@@ -1,4 +1,4 @@
- v/**
+/**
  * صحتنا - Sahatna Data Layer (Unified: Supabase + localStorage)
  *
  * All methods are async (return Promises). When Supabase is configured
@@ -96,7 +96,31 @@ const SahatnaDB = (function () {
   }
 
   function isSupabase() { return _sb !== null; }
+  function isSupabaseConfigured() {
+    return typeof SUPABASE_CONFIG !== 'undefined' && SUPABASE_CONFIG.enabled === true;
+  }
+  async function useSupabase() {
+    await ensureInit();
+    return isSupabase();
+  }
   function invalidateCache() { cache = null; }
+
+  function escapeHTML(value) {
+    return String(value == null ? '' : value)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#039;');
+  }
+
+  function safeImageURL(value) {
+    try {
+      const url = new URL(String(value || ''), window.location.href);
+      if (url.protocol === 'https:' || url.protocol === 'http:') return escapeHTML(url.href);
+    } catch (e) { /* invalid URL */ }
+    return '';
+  }
 
   function mapSpecialty(s) { return { id: s.id, name: s.name, nameEn: s.name_en, icon: s.icon }; }
   function mapCity(c) { return { id: c.id, name: c.name }; }
@@ -107,7 +131,7 @@ const SahatnaDB = (function () {
     return { id: d.id, name: d.name, nameEn: d.name_en, specialtyId: d.specialty_id, clinicId: d.clinic_id, photo: d.photo, bio: d.bio, qualifications: d.qualifications, experienceYears: d.experience_years, price: d.price, gender: d.gender, languages: d.languages || ['العربية'], rating: parseFloat(d.rating) || 0, reviewsCount: d.reviews_count || 0, services: d.services || ['clinic'], verified: d.verified, featured: d.featured };
   }
   function mapBooking(b) {
-    return { id: b.id, doctorId: b.doctor_id, clinicId: b.clinic_id, patientName: b.patient_name, patientPhone: b.patient_phone, patientAge: b.patient_age, patientNotes: b.patient_notes, date: b.date, time: b.time, service: b.service, price: b.price, status: b.status, paymentMethod: b.payment_method, paymentStatus: b.payment_status || 'clinic', createdAt: b.created_at };
+    return { id: b.id, doctorId: b.doctor_id, clinicId: b.clinic_id, patientName: b.patient_name, patientPhone: b.patient_phone, patientAge: b.patient_age, patientNotes: b.patient_notes, date: b.date, time: b.time, service: b.service, price: b.price, status: b.status, paymentMethod: b.payment_method, paymentStatus: b.payment_status || 'clinic', reviewed: Boolean(b.reviewed), createdAt: b.created_at };
   }
   function mapReview(r) {
     return { id: r.id, doctorId: r.doctor_id, patientName: r.patient_name, patientPhone: r.patient_phone, rating: r.rating, comment: r.comment, date: r.created_at ? r.created_at.slice(0, 10) : '', verified: r.verified, appointmentId: r.appointment_id };
@@ -135,31 +159,43 @@ const SahatnaDB = (function () {
   async function loadFromSupabase() {
     if (cache && Date.now() - cacheTime < CACHE_TTL) return cache;
     try {
-      // Fetch appointments. For authenticated users (clinic/admin), try the
-      // secure clinic_appointment_details view which decrypts patient_notes.
-      // For anon users, the appointments table returns an empty set (RLS),
-      // and the patient booking page uses getAvailableSlots() which queries
-      // public_appointment_slots directly.
-      let aptsRes;
-      try {
-        // Try the secure view first (decrypts patient_notes for authorized users)
-        aptsRes = await _sb.from('clinic_appointment_details').select('*');
-        if (aptsRes.error) throw aptsRes.error;
-      } catch (e) {
-        // Fall back to raw appointments table if view doesn't exist yet
-        aptsRes = await _sb.from('appointments').select('*');
+      const { data: sessionData } = await _sb.auth.getSession();
+      const isAuthenticated = Boolean(sessionData && sessionData.session);
+      let isStaff = false;
+      if (isAuthenticated) {
+        const [adminRole, clinicRole] = await Promise.all([
+          _sb.rpc('is_admin'),
+          _sb.rpc('is_clinic_user'),
+        ]);
+        isStaff = (!adminRole.error && adminRole.data === true)
+          || (!clinicRole.error && clinicRole.data === true);
       }
+
+      // Patient data is never selected from a view. A guarded RPC explicitly
+      // checks clinic/admin membership before decrypting medical notes.
+      let appointments = [];
+      if (isStaff) {
+        const aptsRes = await _sb.rpc('get_clinic_appointments');
+        if (!aptsRes.error) appointments = aptsRes.data || [];
+      }
+
+      // Anonymous visitors only receive the public-safe clinic projection.
+      // Clinic/admin sessions can read their authorized rows from the table.
+      const clinicsQuery = isStaff
+        ? _sb.from('clinics').select('*')
+        : _sb.from('public_clinics').select('*');
+
       const [specs, cits, clins, docs, scheds, revs, rems] = await Promise.all([
         _sb.from('specialties').select('*'), _sb.from('cities').select('*'),
-        _sb.from('clinics').select('*'), _sb.from('doctors').select('*'),
-        _sb.from('schedules').select('*'), _sb.from('reviews').select('*'),
+        clinicsQuery, _sb.from('doctors').select('*'),
+        _sb.from('schedules').select('*'), _sb.from('public_reviews').select('*'),
         _sb.from('reminders').select('*'),
       ]);
       cache = {
         specialties: (specs.data || []).map(mapSpecialty), cities: (cits.data || []).map(mapCity),
-        clinics: (clins.data || []).map(mapClinic), doctors: (docs.data || []).map(mapDoctor),
+        clinics: (clins.data || []).map(mapClinic), doctors: (docs.data || []).filter((d) => d.active !== false).map(mapDoctor),
         schedules: groupSchedules(scheds.data || []), reviews: (revs.data || []).map(mapReview),
-        bookings: (aptsRes.data || []).map(mapBooking), reminders: (rems.data || []).map(mapReminder),
+        bookings: appointments.map(mapBooking), reminders: (rems.data || []).map(mapReminder),
         clinicUsers: [], adminUsers: [],
       };
       cacheTime = Date.now();
@@ -208,28 +244,12 @@ const SahatnaDB = (function () {
     // appointments table (RLS would return an empty set for them). In
     // localStorage mode, fall back to the in-memory bookings list.
     let bookedTimes = [];
-    if (isSupabase()) {
-      // Prefer the secure public_appointment_slots view (no patient data).
-      // Fall back to the appointments table if the view is unavailable (e.g.
-      // the schema hasn't been applied yet on this project). We only select
-      // the `time` column to minimise data transfer and avoid exposing patient
-      // fields even if RLS isn't enforced yet.
-      let data = null;
-      try {
-        const res = await _sb.from('public_appointment_slots')
-          .select('time')
-          .eq('doctor_id', doctorId)
-          .eq('date', dateStr);
-        data = res.data;
-        if (res.error) throw res.error;
-      } catch (e) {
-        const res2 = await _sb.from('appointments')
-          .select('time')
-          .eq('doctor_id', doctorId)
-          .eq('date', dateStr)
-          .neq('status', 'cancelled');
-        data = res2.data || [];
-      }
+    if (await useSupabase()) {
+      const { data, error } = await _sb.from('public_appointment_slots')
+        .select('time')
+        .eq('doctor_id', doctorId)
+        .eq('date', dateStr);
+      if (error) throw error;
       bookedTimes = (data || []).map((s) => s.time);
     } else {
       bookedTimes = db.bookings
@@ -252,74 +272,23 @@ const SahatnaDB = (function () {
   }
 
   async function createBooking(data) {
-    if (isSupabase()) {
-      // Try the secure create_appointment() RPC function first.
-      // If it doesn't exist (schema not yet applied), fall back to direct INSERT.
-      try {
-        const { data: apt, error } = await _sb.rpc('create_appointment', {
-          p_doctor_id: data.doctorId,
-          p_clinic_id: data.clinicId,
-          p_patient_name: data.patientName,
-          p_patient_phone: data.patientPhone,
-          p_patient_age: data.patientAge || null,
-          p_patient_notes: data.patientNotes || null,
-          p_date: data.date,
-          p_time: data.time,
-          p_service: data.service,
-          p_price: data.price,
-          p_payment_method: data.paymentMethod || 'clinic',
-        });
-
-        if (error) throw error;
-
-        invalidateCache();
-
-        return {
-          id: apt.id, doctorId: apt.doctor_id, clinicId: apt.clinic_id,
-          patientName: apt.patient_name, patientPhone: apt.patient_phone,
-          patientAge: apt.patient_age, patientNotes: apt.patient_notes,
-          date: apt.date, time: apt.time, service: apt.service, price: apt.price,
-          status: apt.status, paymentMethod: apt.payment_method,
-          createdAt: apt.created_at,
-        };
-      } catch (rpcError) {
-        // RPC function doesn't exist — fall back to direct INSERT
-        console.warn('create_appointment RPC not available, using direct INSERT:', rpcError.message);
-        const { data: apt, error: insertError } = await _sb.from('appointments').insert({
-          doctor_id: data.doctorId,
-          clinic_id: data.clinicId,
-          patient_name: data.patientName,
-          patient_phone: data.patientPhone,
-          patient_age: data.patientAge || null,
-          patient_notes: data.patientNotes || null,
-          date: data.date,
-          time: data.time,
-          service: data.service,
-          price: data.price,
-          status: 'confirmed',
-          payment_method: data.paymentMethod || 'clinic',
-        }).select().single();
-
-        if (insertError) throw insertError;
-        invalidateCache();
-
-        // Try to create reminder (non-critical)
-        try {
-          const doctor = await getDoctor(data.doctorId);
-          const clinic = await getClinic(data.clinicId);
-          await _sb.from('reminders').insert({
-            appointment_id: apt.id,
-            patient_name: data.patientName,
-            patient_phone: data.patientPhone,
-            doctor_name: doctor ? doctor.name : '',
-            clinic_name: clinic ? clinic.name : '',
-            date: data.date,
-            time: data.time,
-          });
-        } catch (e) { /* reminder is non-critical */ }
-
-        return mapBooking(apt);
-      }
+    if (await useSupabase()) {
+      const { data: apt, error } = await _sb.rpc('create_appointment', {
+        p_doctor_id: data.doctorId,
+        p_clinic_id: data.clinicId,
+        p_patient_name: data.patientName,
+        p_patient_phone: data.patientPhone,
+        p_patient_age: data.patientAge || null,
+        p_patient_notes: data.patientNotes || null,
+        p_date: data.date,
+        p_time: data.time,
+        p_service: data.service,
+        p_price: data.price,
+        p_payment_method: data.paymentMethod || 'clinic',
+      });
+      if (error) throw error;
+      invalidateCache();
+      return mapBooking(apt);
     }
     const db = loadLocal();
     const booking = { id: 'b' + db.nextBookingId, ...data, status: 'confirmed', paymentMethod: data.paymentMethod || 'clinic', createdAt: new Date().toISOString() };
@@ -332,8 +301,11 @@ const SahatnaDB = (function () {
   }
 
   async function updateBookingStatus(bookingId, status) {
-    if (isSupabase()) {
-      const { data, error } = await _sb.from('appointments').update({ status }).eq('id', bookingId).select().single();
+    if (await useSupabase()) {
+      const { data, error } = await _sb.rpc('update_appointment_status', {
+        p_booking_id: bookingId,
+        p_status: status,
+      });
       if (error) throw error; invalidateCache(); return mapBooking(data);
     }
     const db = loadLocal();
@@ -346,16 +318,16 @@ const SahatnaDB = (function () {
   async function getBookingsByDoctor(doctorId) { return (await load()).bookings.filter((b) => b.doctorId === doctorId).sort((a, b) => (a.date + a.time > b.date + b.time ? 1 : -1)); }
 
   // ---- Patient: My Bookings ----
-  async function getBookingsByPhone(phone) {
+  async function getBookingsByPhone(phone, bookingId) {
     const cleanPhone = phone.replace(/[\s\-]/g, '');
-    if (isSupabase()) {
-      const { data, error } = await _sb.rpc('get_patient_bookings', { p_phone: cleanPhone });
-      if (error) {
-        console.error('get_patient_bookings error:', error);
-        const res = await _sb.from('appointments').select('*').eq('patient_phone', cleanPhone);
-        return (res.data || []).map(mapBooking).sort((a, b) => (b.date + b.time > a.date + a.time ? 1 : -1));
-      }
-      return (data || []).map(mapBooking);
+    if (await useSupabase()) {
+      if (!bookingId) throw new Error('رقم الحجز مطلوب');
+      const { data, error } = await _sb.rpc('get_patient_booking', {
+        p_booking_id: bookingId.replace(/^#/, ''),
+        p_phone: cleanPhone,
+      });
+      if (error) throw error;
+      return data ? [mapBooking(data)] : [];
     }
     const db = await load();
     return db.bookings
@@ -363,15 +335,15 @@ const SahatnaDB = (function () {
       .sort((a, b) => (b.date + b.time > a.date + a.time ? 1 : -1));
   }
 
-  async function cancelBooking(bookingId) {
-    if (isSupabase()) {
-      const { data, error } = await _sb.from('appointments')
-        .update({ status: 'cancelled' })
-        .eq('id', bookingId)
-        .select().single();
+  async function cancelBooking(bookingId, phone) {
+    if (await useSupabase()) {
+      const { data, error } = await _sb.rpc('cancel_patient_booking', {
+        p_booking_id: bookingId,
+        p_phone: phone.replace(/[\s\-]/g, ''),
+      });
       if (error) throw error;
       invalidateCache();
-      return mapBooking(data);
+      return data;
     }
     const db = loadLocal();
     const b = db.bookings.find((x) => x.id === bookingId);
@@ -380,16 +352,13 @@ const SahatnaDB = (function () {
   }
 
   async function addReview(data) {
-    if (isSupabase()) {
-      const { data: review, error } = await _sb.from('reviews').insert({
-        doctor_id: data.doctorId,
-        appointment_id: data.appointmentId || null,
-        patient_name: data.patientName,
-        patient_phone: data.patientPhone,
-        rating: data.rating,
-        comment: data.comment || '',
-        verified: true,
-      }).select().single();
+    if (await useSupabase()) {
+      const { data: review, error } = await _sb.rpc('create_verified_review', {
+        p_booking_id: data.appointmentId,
+        p_phone: data.patientPhone,
+        p_rating: data.rating,
+        p_comment: data.comment || '',
+      });
       if (error) throw error;
       invalidateCache();
       return mapReview(review);
@@ -425,12 +394,13 @@ const SahatnaDB = (function () {
   }
 
   async function updateSchedule(doctorId, slots, slotDuration) {
-    if (isSupabase()) {
-      await _sb.from('schedules').delete().eq('doctor_id', doctorId);
-      if (slots.length > 0) {
-        const rows = slots.map((s) => ({ doctor_id: doctorId, day: s.day, start_time: s.start, end_time: s.end, slot_duration: slotDuration }));
-        await _sb.from('schedules').insert(rows);
-      }
+    if (await useSupabase()) {
+      const { error } = await _sb.rpc('replace_doctor_schedule', {
+        p_doctor_id: doctorId,
+        p_slots: slots,
+        p_slot_duration: slotDuration,
+      });
+      if (error) throw error;
       invalidateCache(); return;
     }
     const db = loadLocal();
@@ -441,45 +411,51 @@ const SahatnaDB = (function () {
   }
 
   // ---- Admin Operations with Activation Code ----
-  function generateActivationCode() {
-    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-    let code = '';
-    for (let i = 0; i < 6; i++) code += chars.charAt(Math.floor(Math.random() * chars.length));
-    return code;
-  }
-
   async function approveClinic(clinicId) {
-    const code = generateActivationCode();
-    if (isSupabase()) {
-      const { data, error } = await _sb.from('clinics')
-        .update({ status: 'approved', activation_code: code })
-        .eq('id', clinicId).select().single();
+    if (await useSupabase()) {
+      const { data, error } = await _sb.rpc('approve_clinic_registration', {
+        p_clinic_id: clinicId,
+      });
       if (error) throw error;
       invalidateCache();
       const clinic = mapClinic(data);
-      clinic.activationCode = code;
+      clinic.activationCode = data.activation_code;
       return clinic;
     }
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+    let code = '';
+    for (let i = 0; i < 6; i++) code += chars.charAt(Math.floor(Math.random() * chars.length));
     const db = loadLocal();
     const c = db.clinics.find((x) => x.id === clinicId);
     if (c) { c.status = 'approved'; c.activationCode = code; saveLocal(db); return c; }
     return null;
   }
 
-  async function activateClinic(clinicName, activationCode, username, password) {
-    if (isSupabase()) {
-      const { data: clinic, error: clinicError } = await _sb.from('clinics')
-        .select('*').eq('activation_code', activationCode).eq('status', 'approved').single();
-      if (clinicError || !clinic) throw new Error('رمز التفعيل غير صحيح أو العيادة غير موافق عليها');
-      if (clinic.name !== clinicName) throw new Error('اسم العيادة لا يطابق السجل');
-      const email = `${username}@sahatna.app`;
-      const { data: authData, error: authError } = await _sb.auth.signUp({ email, password });
-      if (authError || !authData.user) throw new Error('فشل إنشاء الحساب: ' + (authError ? authError.message : 'خطأ غير معروف'));
-      const { error: linkError } = await _sb.from('clinic_users').insert({
-        clinic_id: clinic.id, user_id: authData.user.id, username: username, name: clinic.name + ' - مدير',
+  async function activateClinic(clinicName, activationCode, username, email, password) {
+    if (await useSupabase()) {
+      let authData = null;
+
+      // A returning user may have confirmed the email after the first attempt.
+      const signInResult = await _sb.auth.signInWithPassword({ email, password });
+      if (!signInResult.error) authData = signInResult.data;
+
+      if (!authData || !authData.session) {
+        const signUpResult = await _sb.auth.signUp({ email, password });
+        if (signUpResult.error && !/already|registered/i.test(signUpResult.error.message)) {
+          throw new Error('فشل إنشاء الحساب: ' + signUpResult.error.message);
+        }
+        authData = signUpResult.data;
+      }
+
+      if (!authData || !authData.user || !authData.session) {
+        throw new Error('أكد بريد الحساب ثم سجّل الدخول لإكمال تفعيل العيادة');
+      }
+      const { data: clinic, error: activationError } = await _sb.rpc('activate_clinic_account', {
+        p_clinic_name: clinicName,
+        p_activation_code: activationCode,
+        p_username: username,
       });
-      if (linkError) throw new Error('فشل ربط الحساب بالعيادة: ' + linkError.message);
-      await _sb.from('clinics').update({ activation_code: null }).eq('id', clinic.id);
+      if (activationError) throw new Error('فشل التفعيل: ' + activationError.message);
       invalidateCache();
       return { success: true, clinic: mapClinic(clinic) };
     }
@@ -495,8 +471,10 @@ const SahatnaDB = (function () {
   }
 
   async function rejectClinic(clinicId) {
-    if (isSupabase()) {
-      const { data, error } = await _sb.from('clinics').update({ status: 'rejected' }).eq('id', clinicId).select().single();
+    if (await useSupabase()) {
+      const { data, error } = await _sb.rpc('reject_clinic_registration', {
+        p_clinic_id: clinicId,
+      });
       if (error) throw error; invalidateCache(); return mapClinic(data);
     }
     const db = loadLocal();
@@ -506,11 +484,16 @@ const SahatnaDB = (function () {
   }
 
   async function addClinic(data) {
-    if (isSupabase()) {
-      const { data: clinic, error } = await _sb.from('clinics').insert({
-        name: data.name, city_id: data.cityId, area: data.area, address: data.address,
-        phone: data.phone, lat: data.lat || 0, lng: data.lng || 0, status: 'pending',
-      }).select().single();
+    if (await useSupabase()) {
+      const { data: clinic, error } = await _sb.rpc('register_clinic', {
+        p_name: data.name,
+        p_city_id: data.cityId,
+        p_area: data.area,
+        p_address: data.address,
+        p_phone: data.phone,
+        p_lat: data.lat || 0,
+        p_lng: data.lng || 0,
+      });
       if (error) throw error; invalidateCache(); return mapClinic(clinic);
     }
     const db = loadLocal();
@@ -519,14 +502,21 @@ const SahatnaDB = (function () {
   }
 
   async function addDoctor(data) {
-    if (isSupabase()) {
-      const { data: doctor, error } = await _sb.from('doctors').insert({
-        name: data.name, name_en: data.nameEn, specialty_id: data.specialtyId, clinic_id: data.clinicId,
-        photo: data.photo || '', bio: data.bio || '', qualifications: data.qualifications || '',
-        experience_years: data.experienceYears || 0, price: data.price, gender: data.gender || 'male',
-        languages: data.languages || ['العربية'], services: data.services || ['clinic'],
-        rating: 0, reviews_count: 0, verified: false, featured: false,
-      }).select().single();
+    if (await useSupabase()) {
+      const { data: doctor, error } = await _sb.rpc('create_doctor', {
+        p_name: data.name,
+        p_name_en: data.nameEn || '',
+        p_specialty_id: data.specialtyId,
+        p_clinic_id: data.clinicId,
+        p_photo: data.photo || '',
+        p_bio: data.bio || '',
+        p_qualifications: data.qualifications || '',
+        p_experience_years: data.experienceYears || 0,
+        p_price: data.price,
+        p_gender: data.gender || 'male',
+        p_languages: data.languages || ['العربية'],
+        p_services: data.services || ['clinic'],
+      });
       if (error) throw error; invalidateCache(); return mapDoctor(doctor);
     }
     const db = loadLocal();
@@ -535,8 +525,10 @@ const SahatnaDB = (function () {
   }
 
   async function deleteDoctor(doctorId) {
-    if (isSupabase()) {
-      const { error } = await _sb.from('doctors').delete().eq('id', doctorId);
+    if (await useSupabase()) {
+      const { error } = await _sb.rpc('delete_or_deactivate_doctor', {
+        p_doctor_id: doctorId,
+      });
       if (error) throw error; invalidateCache(); return true;
     }
     const db = loadLocal();
@@ -547,8 +539,11 @@ const SahatnaDB = (function () {
   }
 
   async function updateDoctor(doctorId, updates) {
-    if (isSupabase()) {
-      const { data, error } = await _sb.from('doctors').update(updates).eq('id', doctorId).select().single();
+    if (await useSupabase()) {
+      const { data, error } = await _sb.rpc('update_doctor', {
+        p_doctor_id: doctorId,
+        p_updates: updates,
+      });
       if (error) throw error; invalidateCache(); return mapDoctor(data);
     }
     const db = loadLocal();
@@ -558,8 +553,8 @@ const SahatnaDB = (function () {
   }
 
   async function clinicLogin(username, password) {
-    if (isSupabase()) {
-      const email = `${username}@sahatna.app`;
+    if (await useSupabase()) {
+      const email = username.includes('@') ? username : `${username}@sahatna.app`;
       const { data: authData, error: authError } = await _sb.auth.signInWithPassword({ email, password });
       if (authError || !authData.user) {
         if (authError) console.error('Login error:', authError);
@@ -568,6 +563,7 @@ const SahatnaDB = (function () {
       const { data: clinicUser, error: clinicUserError } = await _sb.from('clinic_users').select('*').eq('user_id', authData.user.id).single();
       if (!clinicUser) {
         if (clinicUserError) console.error('clinic_users lookup error:', clinicUserError);
+        await _sb.auth.signOut();
         return null;
       }
       const { data: clinic, error: clinicError } = await _sb.from('clinics').select('*').eq('id', clinicUser.clinic_id).single();
@@ -582,8 +578,8 @@ const SahatnaDB = (function () {
   }
 
   async function adminLogin(username, password) {
-    if (isSupabase()) {
-      const email = `${username}@sahatna.app`;
+    if (await useSupabase()) {
+      const email = username.includes('@') ? username : `${username}@sahatna.app`;
       const { data: authData, error: authError } = await _sb.auth.signInWithPassword({ email, password });
       if (authError || !authData.user) {
         if (authError) console.error('Login error:', authError);
@@ -592,6 +588,7 @@ const SahatnaDB = (function () {
       const { data: adminUser, error: adminUserError } = await _sb.from('admin_users').select('*').eq('user_id', authData.user.id).single();
       if (!adminUser) {
         if (adminUserError) console.error('admin_users lookup error:', adminUserError);
+        await _sb.auth.signOut();
         return null;
       }
       invalidateCache();
@@ -601,33 +598,55 @@ const SahatnaDB = (function () {
     return db.adminUsers.find((u) => u.username === username && u.password === password) || null;
   }
 
-  async function signOut() { if (isSupabase()) await _sb.auth.signOut(); }
+  async function getCurrentClinicSession() {
+    if (!(await useSupabase())) return null;
+    const { data: authData, error: authError } = await _sb.auth.getUser();
+    if (authError || !authData.user) return null;
+    const { data: clinicUser, error: clinicUserError } = await _sb
+      .from('clinic_users').select('*').eq('user_id', authData.user.id).maybeSingle();
+    if (clinicUserError || !clinicUser) return null;
+    const { data: clinic, error: clinicError } = await _sb
+      .from('clinics').select('*').eq('id', clinicUser.clinic_id).maybeSingle();
+    if (clinicError || !clinic) return null;
+    return {
+      user: {
+        id: clinicUser.id,
+        clinicId: clinicUser.clinic_id,
+        userId: clinicUser.user_id,
+        username: clinicUser.username,
+        name: clinicUser.name,
+      },
+      clinic: mapClinic(clinic),
+    };
+  }
 
-  // ---- Audit Logging ----
-  // Logs administrative actions to the audit_log table via the
-  // log_audit_entry() SECURITY DEFINER function. Only works for
-  // authenticated users (clinic/admin). Silently fails if not available.
-  async function logAudit(action, targetTable, targetId, details) {
-    if (!isSupabase()) return; // No-op in localStorage mode
-    try {
-      await _sb.rpc('log_audit_entry', {
-        p_action: action,
-        p_target_table: targetTable,
-        p_target_id: targetId || null,
-        p_details: details || {},
-        p_actor_type: 'user',
-      });
-    } catch (e) {
-      // Audit logging is non-critical — don't fail the operation
-      console.warn('Audit log failed:', e.message);
-    }
+  async function getCurrentAdmin() {
+    if (!(await useSupabase())) return null;
+    const { data: authData, error: authError } = await _sb.auth.getUser();
+    if (authError || !authData.user) return null;
+    const { data: adminUser, error } = await _sb
+      .from('admin_users').select('*').eq('user_id', authData.user.id).maybeSingle();
+    if (error || !adminUser) return null;
+    return {
+      id: adminUser.id,
+      userId: adminUser.user_id,
+      username: adminUser.username,
+      name: adminUser.name,
+    };
+  }
+
+  async function signOut() {
+    if (await useSupabase()) await _sb.auth.signOut();
+    invalidateCache();
   }
 
   async function getPendingReminders() { return (await load()).reminders.filter((r) => !r.sent); }
 
   async function markReminderSent(reminderId) {
-    if (isSupabase()) {
-      const { data, error } = await _sb.from('reminders').update({ sent: true, sent_at: new Date().toISOString() }).eq('id', reminderId).select().single();
+    if (await useSupabase()) {
+      const { data, error } = await _sb.rpc('mark_reminder_sent', {
+        p_reminder_id: reminderId,
+      });
       if (error) throw error; invalidateCache(); return mapReminder(data);
     }
     const db = loadLocal();
@@ -651,15 +670,18 @@ const SahatnaDB = (function () {
     };
   }
 
-  async function reset() { if (isSupabase()) { invalidateCache(); return; } return resetLocal(); }
+  async function reset() { if (await useSupabase()) { invalidateCache(); return; } return resetLocal(); }
 
   return {
+    escapeHTML, safeImageURL,
+    isSupabaseEnabled: isSupabaseConfigured,
     load, reset, getSpecialty, getCity, getClinic, getDoctor, getSchedule,
     getAvailableSlots, getAvailableDays, formatTime, getDayName, getMonthName,
     createBooking, updateBookingStatus, getBookingsByClinic, getBookingsByDoctor,
     updateSchedule, approveClinic, rejectClinic, activateClinic, addClinic,
     addDoctor, deleteDoctor, updateDoctor, clinicLogin, adminLogin, signOut,
-    getPendingReminders, markReminderSent, getStats, logAudit,
+    getCurrentClinicSession, getCurrentAdmin,
+    getPendingReminders, markReminderSent, getStats,
     getBookingsByPhone, cancelBooking, addReview, hasReviewed,
   };
 })();

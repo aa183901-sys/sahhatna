@@ -1,3 +1,7 @@
+DO $$ BEGIN
+  RAISE EXCEPTION 'ملف Vault قديم ومعطّل لتجنب فقدان المفتاح. استخدم supabase-production-hardening.sql.';
+END $$;
+
 -- ============================================================
 -- صحتنا (Sahatna) - Supabase Vault Migration
 -- استبدال مفتاح التشفير الثابت بـ Supabase Vault
