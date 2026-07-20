@@ -6,6 +6,6 @@
  */
 window.SAHATNA_RUNTIME_CONFIG = Object.freeze({
   supabaseUrl: 'https://wydmhiqftmiqkfahypzn.supabase.co',
-  supabaseAnonKey: '',
-  supabaseEnabled: false,
+  supabaseAnonKey: 'sb_publishable_mQygdj6esipSg5sVijbMlw_k_hEx5b-',
+  supabaseEnabled: true,
 });
