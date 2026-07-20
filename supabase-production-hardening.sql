@@ -461,11 +461,10 @@ BEGIN
   IF NOT EXISTS (
     SELECT 1 FROM vault.decrypted_secrets WHERE name = 'sahatna_field_key'
   ) THEN
-    INSERT INTO vault.secrets (name, description, secret)
-    VALUES (
+    PERFORM vault.create_secret(
+      encode(gen_random_bytes(32), 'hex'),
       'sahatna_field_key',
-      'Sahhatna field encryption key',
-      encode(gen_random_bytes(32), 'hex')
+      'Sahhatna field encryption key'
     );
   END IF;
 END $$;
