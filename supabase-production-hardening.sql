@@ -8,7 +8,8 @@
 
 BEGIN;
 
-CREATE EXTENSION IF NOT EXISTS "pgcrypto";
+CREATE SCHEMA IF NOT EXISTS extensions;
+CREATE EXTENSION IF NOT EXISTS "pgcrypto" WITH SCHEMA extensions;
 CREATE SCHEMA IF NOT EXISTS private;
 REVOKE ALL ON SCHEMA private FROM PUBLIC, anon, authenticated;
 
@@ -459,7 +460,7 @@ BEGIN
     SELECT 1 FROM vault.decrypted_secrets WHERE name = 'sahatna_field_key'
   ) THEN
     PERFORM vault.create_secret(
-      encode(gen_random_bytes(32), 'hex'),
+      encode(extensions.gen_random_bytes(32), 'hex'),
       'sahatna_field_key',
       'Sahhatna field encryption key'
     );
@@ -527,7 +528,7 @@ REVOKE ALL ON FUNCTION private.bootstrap_admin(UUID, TEXT, TEXT)
 DO $$
 BEGIN
   BEGIN
-    PERFORM pgp_sym_decrypt(
+    PERFORM extensions.pgp_sym_decrypt(
       patient_notes_encrypted,
       private.get_encryption_key()
     )
@@ -542,7 +543,7 @@ BEGIN
     SELECT 1
     FROM appointments
     WHERE patient_notes_encrypted IS NOT NULL
-      AND pgp_sym_decrypt(
+      AND extensions.pgp_sym_decrypt(
         patient_notes_encrypted,
         private.get_encryption_key()
       ) = '[محمي]'
@@ -553,7 +554,7 @@ BEGIN
 END $$;
 
 UPDATE appointments
-SET patient_notes_encrypted = pgp_sym_encrypt(
+SET patient_notes_encrypted = extensions.pgp_sym_encrypt(
       patient_notes,
       private.get_encryption_key()
     )
@@ -568,7 +569,7 @@ BEGIN
     WHERE patient_notes_encrypted IS NOT NULL
       AND patient_notes IS NOT NULL
       AND patient_notes <> '[محمي]'
-      AND pgp_sym_decrypt(
+      AND extensions.pgp_sym_decrypt(
         patient_notes_encrypted,
         private.get_encryption_key()
       ) IS DISTINCT FROM patient_notes
@@ -592,7 +593,7 @@ BEGIN
   IF NEW.patient_notes IS NULL OR NEW.patient_notes = '' OR NEW.patient_notes = '[محمي]' THEN
     RETURN NEW;
   END IF;
-  NEW.patient_notes_encrypted := pgp_sym_encrypt(
+  NEW.patient_notes_encrypted := extensions.pgp_sym_encrypt(
     NEW.patient_notes,
     private.get_encryption_key()
   );
@@ -685,7 +686,7 @@ BEGIN
     RAISE EXCEPTION 'رقم الهاتف يجب أن يكون بصيغة عراقية 07XXXXXXXXX';
   END IF;
   IF NOT private.consume_rate_limit(
-    encode(digest(p_patient_phone, 'sha256'), 'hex'), 'booking', 5, 15
+    encode(extensions.digest(p_patient_phone, 'sha256'), 'hex'), 'booking', 5, 15
   ) THEN
     RAISE EXCEPTION 'محاولات حجز كثيرة. حاول لاحقاً';
   END IF;
@@ -833,7 +834,7 @@ BEGIN
     RAISE EXCEPTION 'رقم الهاتف غير صحيح';
   END IF;
   IF NOT private.consume_rate_limit(
-    encode(digest(p_booking_id::TEXT || ':' || p_phone, 'sha256'), 'hex'),
+    encode(extensions.digest(p_booking_id::TEXT || ':' || p_phone, 'sha256'), 'hex'),
     'patient_booking_lookup', 10, 15
   ) THEN
     RAISE EXCEPTION 'محاولات استرجاع كثيرة. حاول لاحقاً';
@@ -847,7 +848,7 @@ BEGIN
     'patient_age', a.patient_age,
     'patient_notes', CASE
       WHEN a.patient_notes_encrypted IS NULL THEN NULL
-      ELSE pgp_sym_decrypt(a.patient_notes_encrypted, private.get_encryption_key())
+      ELSE extensions.pgp_sym_decrypt(a.patient_notes_encrypted, private.get_encryption_key())
     END,
     'date', a.date,
     'time', a.time,
@@ -884,7 +885,7 @@ BEGIN
     RAISE EXCEPTION 'رقم الهاتف غير صحيح';
   END IF;
   IF NOT private.consume_rate_limit(
-    encode(digest(p_booking_id::TEXT || ':' || p_phone, 'sha256'), 'hex'),
+    encode(extensions.digest(p_booking_id::TEXT || ':' || p_phone, 'sha256'), 'hex'),
     'patient_booking_cancel', 5, 15
   ) THEN
     RAISE EXCEPTION 'محاولات إلغاء كثيرة. حاول لاحقاً';
@@ -946,7 +947,7 @@ BEGIN
     a.patient_age,
     CASE
       WHEN a.patient_notes_encrypted IS NULL THEN NULL
-      ELSE pgp_sym_decrypt(a.patient_notes_encrypted, private.get_encryption_key())
+      ELSE extensions.pgp_sym_decrypt(a.patient_notes_encrypted, private.get_encryption_key())
     END,
     a.date, a.time, a.service, a.price, a.status, a.payment_method,
     a.payment_status, a.created_at, a.updated_at
@@ -1038,7 +1039,7 @@ BEGIN
     'patient_age', v_appointment.patient_age,
     'patient_notes', CASE
       WHEN v_appointment.patient_notes_encrypted IS NULL THEN NULL
-      ELSE pgp_sym_decrypt(
+      ELSE extensions.pgp_sym_decrypt(
         v_appointment.patient_notes_encrypted,
         private.get_encryption_key()
       )
@@ -1307,7 +1308,7 @@ BEGIN
     RAISE EXCEPTION 'رقم الهاتف غير صحيح';
   END IF;
   IF NOT private.consume_rate_limit(
-    encode(digest(p_phone, 'sha256'), 'hex'), 'clinic_registration', 3, 1440
+    encode(extensions.digest(p_phone, 'sha256'), 'hex'), 'clinic_registration', 3, 1440
   ) THEN
     RAISE EXCEPTION 'تم تجاوز عدد محاولات تسجيل العيادة';
   END IF;
@@ -1355,7 +1356,7 @@ BEGIN
     RAISE EXCEPTION 'Admin authentication required';
   END IF;
 
-  v_code := upper(substr(encode(gen_random_bytes(6), 'hex'), 1, 6));
+  v_code := upper(substr(encode(extensions.gen_random_bytes(6), 'hex'), 1, 6));
   UPDATE public.clinics
   SET status = 'approved', activation_code = v_code
   WHERE id = p_clinic_id AND status = 'pending'
@@ -1500,7 +1501,7 @@ BEGIN
     RAISE EXCEPTION 'رقم الهاتف غير صحيح';
   END IF;
   IF NOT private.consume_rate_limit(
-    encode(digest(p_booking_id::TEXT || ':' || p_phone, 'sha256'), 'hex'),
+    encode(extensions.digest(p_booking_id::TEXT || ':' || p_phone, 'sha256'), 'hex'),
     'verified_review', 5, 60
   ) THEN
     RAISE EXCEPTION 'محاولات تقييم كثيرة. حاول لاحقاً';
