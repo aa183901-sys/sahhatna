@@ -111,8 +111,7 @@ GRANT EXECUTE ON FUNCTION is_clinic_user() TO authenticated;
 -- ============================================================
 
 DROP VIEW IF EXISTS public_doctor_summary;
-DROP VIEW IF EXISTS public_clinics;
-CREATE VIEW public_clinics
+CREATE OR REPLACE VIEW public_clinics
 WITH (security_barrier = true)
 AS
 SELECT id, name, city_id, area, address, phone, lat, lng, status, created_at
@@ -122,8 +121,7 @@ WHERE status = 'approved';
 REVOKE ALL ON public_clinics FROM PUBLIC;
 GRANT SELECT ON public_clinics TO anon, authenticated;
 
-DROP VIEW IF EXISTS public_reviews;
-CREATE VIEW public_reviews
+CREATE OR REPLACE VIEW public_reviews
 WITH (security_barrier = true)
 AS
 SELECT
@@ -143,8 +141,7 @@ WHERE verified = true;
 REVOKE ALL ON public_reviews FROM PUBLIC;
 GRANT SELECT ON public_reviews TO anon, authenticated;
 
-DROP VIEW IF EXISTS public_appointment_slots;
-CREATE VIEW public_appointment_slots
+CREATE OR REPLACE VIEW public_appointment_slots
 WITH (security_barrier = true)
 AS
 SELECT doctor_id, date, time
