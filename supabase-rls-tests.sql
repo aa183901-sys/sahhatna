@@ -9,7 +9,8 @@
 
 BEGIN;
 
-CREATE TEMP TABLE test_results (
+DROP TABLE IF EXISTS private._rls_test_results;
+CREATE TABLE private._rls_test_results (
   test_name TEXT PRIMARY KEY,
   passed BOOLEAN NOT NULL,
   details TEXT NOT NULL DEFAULT ''
@@ -23,10 +24,10 @@ CREATE OR REPLACE FUNCTION pg_temp.record_test(
 RETURNS VOID
 LANGUAGE plpgsql
 SECURITY DEFINER
-SET search_path = pg_temp
+SET search_path = ''
 AS $$
 BEGIN
-  INSERT INTO pg_temp.test_results(test_name, passed, details)
+  INSERT INTO private._rls_test_results(test_name, passed, details)
   VALUES (p_name, p_passed, COALESCE(p_details, ''));
   IF p_passed THEN
     RAISE NOTICE '✅ PASS: %', p_name;
@@ -410,7 +411,7 @@ BEGIN
     COUNT(*) FILTER (WHERE NOT passed),
     string_agg(test_name, ' | ') FILTER (WHERE NOT passed)
   INTO v_total, v_passed, v_failed, v_failed_names
-  FROM pg_temp.test_results;
+  FROM private._rls_test_results;
 
   RAISE NOTICE '============================================================';
   RAISE NOTICE 'RLS tests: total=%, passed=%, failed=%', v_total, v_passed, v_failed;
