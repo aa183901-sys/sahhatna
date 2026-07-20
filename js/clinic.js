@@ -10,6 +10,14 @@ let currentClinicUser = null;
 let calendarDate = new Date();
 let selectedCalendarDay = null;
 
+const escapeHTML = (value) => SahatnaDB.escapeHTML(value);
+const safeImageURL = (value) => SahatnaDB.safeImageURL(value);
+const escapeCSVCell = (value) => {
+  let text = String(value == null ? '' : value);
+  if (/^[=+\-@]/.test(text)) text = "'" + text;
+  return `"${text.replace(/"/g, '""')}"`;
+};
+
 // ---- Utilities -----------------------------------------------------------
 function showToast(message, type = 'success') {
   const container = document.getElementById('toastContainer');
@@ -54,15 +62,20 @@ async function handleClinicLogin(event) {
   const username = document.getElementById('loginUsername').value.trim();
   const password = document.getElementById('loginPassword').value.trim();
 
-  const result = await SahatnaDB.clinicLogin(username, password);
-  if (result) {
-    currentClinicUser = result.user;
-    currentClinic = result.clinic;
-    sessionStorage.setItem('sahatna_clinic', JSON.stringify({ userId: result.user.id, clinicId: result.clinic.id }));
-    showDashboard();
-    showToast('تم تسجيل الدخول بنجاح', 'success');
-  } else {
-    showToast('اسم المستخدم أو كلمة المرور غير صحيحة', 'error');
+  try {
+    const result = await SahatnaDB.clinicLogin(username, password);
+    if (result) {
+      currentClinicUser = result.user;
+      currentClinic = result.clinic;
+      sessionStorage.setItem('sahatna_clinic', JSON.stringify({ userId: result.user.id, clinicId: result.clinic.id }));
+      await showDashboard();
+      showToast('تم تسجيل الدخول بنجاح', 'success');
+    } else {
+      showToast('اسم المستخدم أو كلمة المرور غير صحيحة', 'error');
+    }
+  } catch (error) {
+    console.error('Clinic login failed:', error);
+    showToast('تعذر الاتصال بخدمة تسجيل الدخول', 'error');
   }
 }
 
@@ -77,6 +90,21 @@ async function clinicLogout() {
 }
 
 async function checkClinicSession() {
+  if (SahatnaDB.isSupabaseEnabled()) {
+    const session = await SahatnaDB.getCurrentClinicSession();
+    if (session) {
+      currentClinicUser = session.user;
+      currentClinic = session.clinic;
+      sessionStorage.setItem('sahatna_clinic', JSON.stringify({
+        userId: session.user.id,
+        clinicId: session.clinic.id,
+      }));
+      await showDashboard();
+    } else {
+      sessionStorage.removeItem('sahatna_clinic');
+    }
+    return;
+  }
   const saved = sessionStorage.getItem('sahatna_clinic');
   if (saved) {
     try {
@@ -85,7 +113,7 @@ async function checkClinicSession() {
       if (clinic) {
         currentClinicUser = { id: userId, clinicId, name: 'مدير العيادة' };
         currentClinic = clinic;
-        showDashboard();
+        await showDashboard();
       }
     } catch (e) {
       console.error('Clinic session restore error:', e);
@@ -271,7 +299,7 @@ async function exportBookingsCSV() {
   });
 
   const csv = [headers, ...rows]
-    .map((row) => row.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(','))
+    .map((row) => row.map(escapeCSVCell).join(','))
     .join('\n');
 
   const bom = '\uFEFF';
@@ -333,15 +361,15 @@ async function renderBookingsList() {
           <div class="flex items-start justify-between gap-3 flex-wrap">
             <div class="flex-1 min-w-0">
               <div class="flex items-center gap-2 mb-1">
-                <span class="font-bold text-gray-800">${b.patientName}</span>
+                <span class="font-bold text-gray-800">${escapeHTML(b.patientName)}</span>
                 ${getStatusBadge(b.status)}
               </div>
               <div class="text-sm text-gray-500 space-y-1">
-                <p>👨‍⚕️ ${doctor ? doctor.name : ''} - ${specialty ? specialty.name : ''}</p>
+                <p>👨‍⚕️ ${escapeHTML(doctor ? doctor.name : '')} - ${escapeHTML(specialty ? specialty.name : '')}</p>
                 <p>📅 ${dayName} ${b.date} • ⏰ ${SahatnaDB.formatTime(timeParts[0], timeParts[1])}</p>
-                <p>📞 ${b.patientPhone} ${b.patientAge ? '• العمر: ' + b.patientAge : ''}</p>
+                <p>📞 ${escapeHTML(b.patientPhone)} ${b.patientAge ? '• العمر: ' + Number(b.patientAge) : ''}</p>
                 <p>🏥 ${getServiceLabel(b.service)} • 💰 ${formatPrice(b.price)}</p>
-                ${b.patientNotes ? `<p class="text-gray-400 italic">📝 ${b.patientNotes}</p>` : ''}
+                ${b.patientNotes ? `<p class="text-gray-400 italic">📝 ${escapeHTML(b.patientNotes)}</p>` : ''}
               </div>
             </div>
             <div class="flex flex-col gap-2 flex-shrink-0">
@@ -365,7 +393,6 @@ async function renderBookingsList() {
 
 async function updateBookingStatus(bookingId, status) {
   await SahatnaDB.updateBookingStatus(bookingId, status);
-  await SahatnaDB.logAudit('appointment.update_status', 'appointments', bookingId, { new_status: status, clinic_id: currentClinic.id });
   await renderBookingsList();
   await renderClinicStats();
   showToast(`تم تحديث حالة الحجز إلى: ${getStatusLabel(status)}`, 'success');
@@ -374,7 +401,6 @@ async function updateBookingStatus(bookingId, status) {
 async function cancelBooking(bookingId) {
   if (confirm('هل أنت متأكد من إلغاء هذا الحجز؟')) {
     await SahatnaDB.updateBookingStatus(bookingId, 'cancelled');
-    await SahatnaDB.logAudit('appointment.cancel', 'appointments', bookingId, { clinic_id: currentClinic.id });
     await renderBookingsList();
     await renderClinicStats();
     showToast('تم إلغاء الحجز', 'info');
@@ -462,8 +488,8 @@ async function renderCalendarDayDetail(dateStr) {
           <div class="booking-item status-${b.status}">
             <div class="flex items-center justify-between">
               <div>
-                <span class="font-bold text-sm">${b.patientName}</span>
-                <span class="text-gray-400 text-sm"> - ${doctor ? doctor.name : ''}</span>
+                <span class="font-bold text-sm">${escapeHTML(b.patientName)}</span>
+                <span class="text-gray-400 text-sm"> - ${escapeHTML(doctor ? doctor.name : '')}</span>
               </div>
               <div class="flex items-center gap-2">
                 <span class="text-sm text-gray-500">⏰ ${SahatnaDB.formatTime(timeParts[0], timeParts[1])}</span>
@@ -494,21 +520,19 @@ async function renderClinicDoctors() {
     const docBookings = await SahatnaDB.getBookingsByDoctor(d.id);
     const completed = docBookings.filter((b) => b.status === 'completed').length;
     const revenue = docBookings.filter((b) => b.status === 'completed').reduce((sum, b) => sum + b.price, 0);
-    const safeName = d.name.replace(/'/g, "\\'");
-
     cards.push(`
       <div class="border border-gray-200 rounded-2xl p-4 bg-white">
         <div class="flex gap-3">
-          <img src="${d.photo}" class="w-16 h-16 rounded-xl object-cover" />
+          <img src="${safeImageURL(d.photo)}" class="w-16 h-16 rounded-xl object-cover" />
           <div class="flex-1">
             <div class="flex items-center gap-2">
-              <h4 class="font-bold text-gray-800">${d.name}</h4>
+              <h4 class="font-bold text-gray-800">${escapeHTML(d.name)}</h4>
               ${d.verified ? '<span class="verified-badge">✓</span>' : ''}
             </div>
-            <p class="text-sm text-primary">${specialty ? specialty.name : ''}</p>
+            <p class="text-sm text-primary">${escapeHTML(specialty ? specialty.name : '')}</p>
             <p class="text-xs text-gray-500 mt-1">خبرة ${d.experienceYears} سنة • ⭐ ${d.rating} (${d.reviewsCount})</p>
           </div>
-          <button onclick="deleteDoctor('${d.id}', '${safeName}')" class="btn-danger text-xs flex-shrink-0 self-start">🗑️ حذف</button>
+          <button onclick="deleteDoctor('${d.id}')" class="btn-danger text-xs flex-shrink-0 self-start">🗑️ حذف</button>
         </div>
         <div class="grid grid-cols-3 gap-2 mt-3 pt-3 border-t border-gray-100 text-center">
           <div><p class="text-xs text-gray-400">السعر</p><p class="font-bold text-sm text-primary">${formatPrice(d.price)}</p></div>
@@ -522,11 +546,12 @@ async function renderClinicDoctors() {
 }
 
 // ---- Delete Doctor -------------------------------------------------------
-async function deleteDoctor(doctorId, doctorName) {
+async function deleteDoctor(doctorId) {
+  const doctor = await SahatnaDB.getDoctor(doctorId);
+  const doctorName = doctor ? doctor.name : 'الطبيب';
   if (confirm(`هل أنت متأكد من حذف الطبيب "${doctorName}"؟\n\nسيتم حذف:\n• بيانات الطبيب\n• جدول الدوام\n• التقييمات\n\nملاحظة: الحجوزات الحالية لن تُحذف.`)) {
     try {
       await SahatnaDB.deleteDoctor(doctorId);
-      await SahatnaDB.logAudit('doctor.delete', 'doctors', doctorId, { name: doctorName, clinic_id: currentClinic.id });
       showToast('تم حذف الطبيب بنجاح', 'success');
       await renderClinicDoctors();
       await populateScheduleDoctorSelect();
@@ -617,7 +642,6 @@ async function handleAddDoctor(event) {
 
   try {
     const newDoctor = await SahatnaDB.addDoctor(doctorData);
-    await SahatnaDB.logAudit('doctor.create', 'doctors', newDoctor.id, { name: name, specialty_id: specialtyId, clinic_id: currentClinic.id });
     showToast('تمت إضافة الطبيب بنجاح', 'success');
     hideAddDoctorForm();
     await renderClinicDoctors();
@@ -728,7 +752,6 @@ async function saveSchedule(doctorId) {
   }
 
   await SahatnaDB.updateSchedule(doctorId, slots, slotDuration);
-  await SahatnaDB.logAudit('schedule.update', 'schedules', doctorId, { slots_count: slots.length, slot_duration: slotDuration, clinic_id: currentClinic.id });
   showToast('تم حفظ دوام الطبيب بنجاح', 'success');
 }
 
@@ -772,14 +795,14 @@ async function renderReminders() {
         <div class="border border-gray-200 rounded-xl p-4 bg-white flex items-center justify-between ${isToday ? 'border-r-4 border-r-primary' : ''}">
           <div>
             <div class="flex items-center gap-2 mb-1">
-              <span class="font-bold text-gray-800">${r.patientName}</span>
+              <span class="font-bold text-gray-800">${escapeHTML(r.patientName)}</span>
               ${r.sent ? '<span class="badge badge-success">تم الإرسال</span>' : '<span class="badge badge-warning">بانتظار الإرسال</span>'}
               ${isToday ? '<span class="badge badge-primary">اليوم</span>' : ''}
               ${isTomorrow ? '<span class="badge badge-info">غداً</span>' : ''}
             </div>
-            <p class="text-sm text-gray-500">📞 ${r.patientPhone}</p>
+            <p class="text-sm text-gray-500">📞 ${escapeHTML(r.patientPhone)}</p>
             <p class="text-sm text-gray-500">📅 ${dateLabel} ${r.date} • ⏰ ${SahatnaDB.formatTime(timeParts[0], timeParts[1])}</p>
-            <p class="text-xs text-gray-400 mt-1">👨‍⚕️ ${r.doctorName} - ${r.clinicName}</p>
+            <p class="text-xs text-gray-400 mt-1">👨‍⚕️ ${escapeHTML(r.doctorName)} - ${escapeHTML(r.clinicName)}</p>
           </div>
           ${!r.sent ? `<button onclick="sendReminder('${r.id}')" class="btn-primary text-sm">📤 إرسال</button>` : ''}
         </div>
@@ -847,4 +870,12 @@ async function updateRemindersBadge() {
 }
 
 // ---- Initialize ----------------------------------------------------------
-document.addEventListener('DOMContentLoaded', checkClinicSession);
+document.addEventListener('DOMContentLoaded', () => {
+  if (SahatnaDB.isSupabaseEnabled()) {
+    document.getElementById('clinicDemoCredentials')?.classList.add('hidden');
+  }
+  checkClinicSession().catch((error) => {
+    console.error('Clinic session check failed:', error);
+    showToast('تعذر التحقق من جلسة العيادة', 'error');
+  });
+});

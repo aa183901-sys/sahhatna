@@ -44,26 +44,31 @@
       <form onsubmit="handleActivate(event)" class="space-y-4">
         <div>
           <label class="block text-sm font-semibold text-gray-600 mb-1">اسم العيادة <span class="text-danger">*</span></label>
-          <input type="text" id="activateClinicName" required placeholder="مثال: مركز الشفاء الطبي" class="form-input" />
+          <input type="text" id="activateClinicName" required autocomplete="organization" placeholder="مثال: مركز الشفاء الطبي" class="form-input" />
           <p class="text-xs text-gray-400 mt-1">يجب أن يطابق الاسم المسجل لدى الإدارة</p>
         </div>
         <div>
           <label class="block text-sm font-semibold text-gray-600 mb-1">رمز التفعيل <span class="text-danger">*</span></label>
-          <input type="text" id="activateCode" required placeholder="ABC123" maxlength="6" class="form-input text-center text-2xl tracking-widest font-bold uppercase" style="letter-spacing: 0.3em;" />
+          <input type="text" id="activateCode" required autocomplete="one-time-code" placeholder="ABC123" maxlength="6" class="form-input text-center text-2xl tracking-widest font-bold uppercase" style="letter-spacing: 0.3em;" />
           <p class="text-xs text-gray-400 mt-1">6 محارف (أحرف كبيرة + أرقام)</p>
         </div>
         <div>
           <label class="block text-sm font-semibold text-gray-600 mb-1">اسم المستخدم <span class="text-danger">*</span></label>
-          <input type="text" id="activateUsername" required placeholder="مثال: myclinic" class="form-input" />
+          <input type="text" id="activateUsername" required autocomplete="username" placeholder="مثال: myclinic" class="form-input" />
           <p class="text-xs text-gray-400 mt-1">ستستخدمه لتسجيل الدخول</p>
         </div>
         <div>
+          <label class="block text-sm font-semibold text-gray-600 mb-1">البريد الإلكتروني <span class="text-danger">*</span></label>
+          <input type="email" id="activateEmail" required autocomplete="email" placeholder="clinic@example.com" class="form-input" dir="ltr" />
+          <p class="text-xs text-gray-400 mt-1">يُستخدم لتأكيد الحساب واستعادته</p>
+        </div>
+        <div>
           <label class="block text-sm font-semibold text-gray-600 mb-1">كلمة المرور <span class="text-danger">*</span></label>
-          <input type="password" id="activatePassword" required minlength="6" placeholder="••••••" class="form-input" />
+          <input type="password" id="activatePassword" required minlength="8" autocomplete="new-password" placeholder="••••••••" class="form-input" />
         </div>
         <div>
           <label class="block text-sm font-semibold text-gray-600 mb-1">تأكيد كلمة المرور <span class="text-danger">*</span></label>
-          <input type="password" id="activatePasswordConfirm" required minlength="6" placeholder="••••••" class="form-input" />
+          <input type="password" id="activatePasswordConfirm" required minlength="8" autocomplete="new-password" placeholder="••••••••" class="form-input" />
         </div>
         <button type="submit" id="activateBtn" class="btn-primary w-full">تفعيل الحساب</button>
       </form>
@@ -81,6 +86,7 @@
 
   <div id="toastContainer"></div>
 
+  <script src="js/runtime-config.js"></script>
   <script src="js/supabase-config.js"></script>
   <script src="js/data.js"></script>
   <script src="js/activate.js"></script>

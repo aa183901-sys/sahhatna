@@ -10,6 +10,9 @@ let currentSelectedTime = null;
 let currentSelectedService = 'clinic';
 let currentDoctorId = null;
 
+const escapeHTML = (value) => SahatnaDB.escapeHTML(value);
+const safeImageURL = (value) => SahatnaDB.safeImageURL(value);
+
 // ---- Utilities -----------------------------------------------------------
 function formatPrice(price) {
   return new Intl.NumberFormat('ar-IQ').format(price) + ' د.ع';
@@ -103,8 +106,8 @@ async function renderSpecialtiesGrid() {
     .map(
       (sp) => `
     <button onclick="filterBySpecialty('${sp.id}')" class="bg-gray-50 hover:bg-primary-lighter border border-gray-200 hover:border-primary rounded-2xl p-4 text-center transition group">
-      <div class="text-3xl mb-2 group-hover:scale-110 transition">${sp.icon}</div>
-      <div class="text-sm font-semibold text-gray-700 group-hover:text-primary">${sp.name}</div>
+      <div class="text-3xl mb-2 group-hover:scale-110 transition">${escapeHTML(sp.icon)}</div>
+      <div class="text-sm font-semibold text-gray-700 group-hover:text-primary">${escapeHTML(sp.name)}</div>
     </button>
   `
     )
@@ -216,15 +219,15 @@ async function renderDoctors() {
       <div class="doctor-card bg-white rounded-2xl p-4 cursor-pointer animate-fade-in" onclick="openDoctorModal('${doctor.id}')">
         <div class="flex gap-4">
           <div class="relative flex-shrink-0">
-            <img src="${doctor.photo}" alt="${doctor.name}" class="w-20 h-20 rounded-2xl object-cover" />
+            <img src="${safeImageURL(doctor.photo)}" alt="${escapeHTML(doctor.name)}" class="w-20 h-20 rounded-2xl object-cover" />
             ${doctor.verified ? '<div class="verified-badge absolute -bottom-1 -left-1" title="طبيب موثّق">✓</div>' : ''}
           </div>
           <div class="flex-1 min-w-0">
             <div class="flex items-start justify-between gap-2">
               <div>
-                <h4 class="font-bold text-gray-800 truncate">${doctor.name}</h4>
-                <p class="text-sm text-primary font-medium">${specialty ? specialty.name : ''}</p>
-                <p class="text-xs text-gray-500 mt-1">📍 ${clinic ? clinic.area : ''}، ${city ? city.name : ''}</p>
+                <h4 class="font-bold text-gray-800 truncate">${escapeHTML(doctor.name)}</h4>
+                <p class="text-sm text-primary font-medium">${escapeHTML(specialty ? specialty.name : '')}</p>
+                <p class="text-xs text-gray-500 mt-1">📍 ${escapeHTML(clinic ? clinic.area : '')}، ${escapeHTML(city ? city.name : '')}</p>
               </div>
               ${doctor.featured ? '<span class="badge badge-warning flex-shrink-0">⭐ مميز</span>' : ''}
             </div>
@@ -291,14 +294,14 @@ async function openDoctorModal(doctorId) {
         <div class="bg-gradient-to-br from-primary to-primary-dark text-white p-6 rounded-t-2xl relative">
           <button onclick="closeDoctorModal()" class="absolute top-4 left-4 text-white/80 hover:text-white text-2xl">✕</button>
           <div class="flex gap-4">
-            <img src="${doctor.photo}" alt="${doctor.name}" class="w-24 h-24 rounded-2xl border-4 border-white/30 object-cover" />
+            <img src="${safeImageURL(doctor.photo)}" alt="${escapeHTML(doctor.name)}" class="w-24 h-24 rounded-2xl border-4 border-white/30 object-cover" />
             <div class="flex-1">
               <div class="flex items-center gap-2">
-                <h3 class="text-xl font-bold">${doctor.name}</h3>
+                <h3 class="text-xl font-bold">${escapeHTML(doctor.name)}</h3>
                 ${doctor.verified ? '<span class="bg-white text-primary rounded-full w-6 h-6 flex items-center justify-center text-sm font-bold">✓</span>' : ''}
               </div>
-              <p class="text-teal-100">${specialty ? specialty.name : ''}</p>
-              <p class="text-sm text-teal-200 mt-1">📍 ${clinic ? clinic.name : ''} - ${clinic ? clinic.area : ''}، ${city ? city.name : ''}</p>
+              <p class="text-teal-100">${escapeHTML(specialty ? specialty.name : '')}</p>
+              <p class="text-sm text-teal-200 mt-1">📍 ${escapeHTML(clinic ? clinic.name : '')} - ${escapeHTML(clinic ? clinic.area : '')}، ${escapeHTML(city ? city.name : '')}</p>
               <div class="flex items-center gap-3 mt-2">
                 <span class="flex items-center gap-1">
                   ${renderStars(doctor.rating)}
@@ -331,24 +334,24 @@ async function openDoctorModal(doctorId) {
           <!-- About -->
           <div class="mb-4">
             <h4 class="font-bold text-gray-800 mb-2">نبذة عن الطبيب</h4>
-            <p class="text-gray-600 text-sm leading-relaxed">${doctor.bio}</p>
+            <p class="text-gray-600 text-sm leading-relaxed">${escapeHTML(doctor.bio)}</p>
           </div>
 
           <!-- Qualifications -->
           <div class="mb-4">
             <h4 class="font-bold text-gray-800 mb-2">المؤهلات</h4>
-            <p class="text-gray-600 text-sm">🎓 ${doctor.qualifications}</p>
+            <p class="text-gray-600 text-sm">🎓 ${escapeHTML(doctor.qualifications)}</p>
             <p class="text-gray-600 text-sm mt-1">⏱️ خبرة ${doctor.experienceYears} سنة</p>
-            <p class="text-gray-600 text-sm mt-1">🗣️ اللغات: ${doctor.languages.join('، ')}</p>
+            <p class="text-gray-600 text-sm mt-1">🗣️ اللغات: ${escapeHTML(doctor.languages.join('، '))}</p>
           </div>
 
           <!-- Clinic Info -->
           ${clinic ? `
           <div class="mb-4 bg-gray-50 rounded-xl p-4">
             <h4 class="font-bold text-gray-800 mb-2">موقع العيادة</h4>
-            <p class="text-gray-600 text-sm">🏥 ${clinic.name}</p>
-            <p class="text-gray-500 text-sm mt-1">📍 ${clinic.address}</p>
-            <p class="text-gray-500 text-sm mt-1">📞 ${clinic.phone}</p>
+            <p class="text-gray-600 text-sm">🏥 ${escapeHTML(clinic.name)}</p>
+            <p class="text-gray-500 text-sm mt-1">📍 ${escapeHTML(clinic.address)}</p>
+            <p class="text-gray-500 text-sm mt-1">📞 ${escapeHTML(clinic.phone)}</p>
           </div>
           ` : ''}
 
@@ -388,14 +391,14 @@ async function openDoctorModal(doctorId) {
                   (r) => `
                 <div class="bg-gray-50 rounded-xl p-3">
                   <div class="flex items-center justify-between mb-1">
-                    <span class="font-semibold text-sm text-gray-700">${r.patientName}</span>
-                    <span class="text-xs text-gray-400">${r.date}</span>
+                    <span class="font-semibold text-sm text-gray-700">${escapeHTML(r.patientName)}</span>
+                    <span class="text-xs text-gray-400">${escapeHTML(r.date)}</span>
                   </div>
                   <div class="flex items-center gap-2 mb-1">
                     ${renderStars(r.rating)}
                     ${r.verified ? '<span class="badge badge-success text-xs">زيارة موثّقة</span>' : ''}
                   </div>
-                  <p class="text-gray-600 text-sm">${r.comment}</p>
+                  <p class="text-gray-600 text-sm">${escapeHTML(r.comment)}</p>
                 </div>
               `
                 )
@@ -547,10 +550,10 @@ async function openBookingForm() {
         <div class="p-6">
           <div class="bg-primary-lighter rounded-xl p-4 mb-4">
             <div class="flex items-center gap-3 mb-3">
-              <img src="${doctor.photo}" class="w-14 h-14 rounded-xl object-cover" />
+              <img src="${safeImageURL(doctor.photo)}" class="w-14 h-14 rounded-xl object-cover" />
               <div>
-                <h4 class="font-bold text-gray-800">${doctor.name}</h4>
-                <p class="text-sm text-gray-600">${(await SahatnaDB.getSpecialty(doctor.specialtyId))?.name || ''}</p>
+                <h4 class="font-bold text-gray-800">${escapeHTML(doctor.name)}</h4>
+                <p class="text-sm text-gray-600">${escapeHTML((await SahatnaDB.getSpecialty(doctor.specialtyId))?.name || '')}</p>
               </div>
             </div>
             <div class="grid grid-cols-2 gap-2 text-sm">
@@ -686,6 +689,8 @@ function resetSubmitBtn() {
 }
 
 async function showBookingSuccess(booking, doctor) {
+  sessionStorage.setItem('sahatna_patient_phone', booking.patientPhone);
+  sessionStorage.setItem('sahatna_booking_id', booking.id);
   const clinic = await SahatnaDB.getClinic(doctor.clinicId);
   const dayName = SahatnaDB.getDayName(new Date(booking.date + 'T00:00:00').getDay());
   const timeParts = booking.time.split(':').map(Number);
@@ -706,25 +711,25 @@ async function showBookingSuccess(booking, doctor) {
           <p class="text-gray-500 mb-6">سيصلك تذكير برسالة نصية قبل الموعد</p>
           <div class="bg-gray-50 rounded-xl p-4 text-right mb-6">
             <div class="flex items-center gap-3 mb-3 pb-3 border-b border-gray-200">
-              <img src="${doctor.photo}" class="w-12 h-12 rounded-xl object-cover" />
+              <img src="${safeImageURL(doctor.photo)}" class="w-12 h-12 rounded-xl object-cover" />
               <div>
-                <h4 class="font-bold text-gray-800">${doctor.name}</h4>
-                <p class="text-sm text-gray-500">${specialty ? specialty.name : ''}</p>
+                <h4 class="font-bold text-gray-800">${escapeHTML(doctor.name)}</h4>
+                <p class="text-sm text-gray-500">${escapeHTML(specialty ? specialty.name : '')}</p>
               </div>
             </div>
             <div class="space-y-2 text-sm">
               <div class="flex justify-between"><span class="text-gray-400">رقم الحجز:</span><span class="font-bold text-primary">#${booking.id}</span></div>
               <div class="flex justify-between"><span class="text-gray-400">التاريخ:</span><span class="font-semibold">${dayName} ${booking.date}</span></div>
               <div class="flex justify-between"><span class="text-gray-400">الوقت:</span><span class="font-semibold">${SahatnaDB.formatTime(timeParts[0], timeParts[1])}</span></div>
-              <div class="flex justify-between"><span class="text-gray-400">العيادة:</span><span class="font-semibold">${clinic.name}</span></div>
-              <div class="flex justify-between"><span class="text-gray-400">العنوان:</span><span class="font-semibold text-xs">${clinic.address}</span></div>
+              <div class="flex justify-between"><span class="text-gray-400">العيادة:</span><span class="font-semibold">${escapeHTML(clinic.name)}</span></div>
+              <div class="flex justify-between"><span class="text-gray-400">العنوان:</span><span class="font-semibold text-xs">${escapeHTML(clinic.address)}</span></div>
               <div class="flex justify-between"><span class="text-gray-400">طريقة الدفع:</span><span class="font-semibold">ادفع بالعيادة</span></div>
               <div class="flex justify-between pt-2 border-t border-gray-200"><span class="text-gray-400">السعر:</span><span class="font-bold text-primary">${formatPrice(doctor.price)}</span></div>
             </div>
           </div>
           <div class="bg-info-light rounded-xl p-3 mb-6 text-sm text-info flex items-center gap-2 justify-center">
             <span>📱</span>
-            <span>سيصلك تذكير على الرقم ${booking.patientPhone} قبل الموعد</span>
+            <span>سيصلك تذكير على الرقم ${escapeHTML(booking.patientPhone)} قبل الموعد</span>
           </div>
           <div class="flex gap-3">
             <button onclick="closeSuccessModal()" class="btn-secondary flex-1">تم</button>
@@ -771,7 +776,7 @@ async function openRegisterModal() {
                   <label class="block text-sm font-semibold text-gray-600 mb-1">المدينة *</label>
                   <select id="regCity" required class="form-input">
                     <option value="">اختر المدينة</option>
-                    ${db.cities.map((c) => `<option value="${c.id}">${c.name}</option>`).join('')}
+                    ${db.cities.map((c) => `<option value="${escapeHTML(c.id)}">${escapeHTML(c.name)}</option>`).join('')}
                   </select>
                 </div>
                 <div>

@@ -1,152 +1,75 @@
-# صحتنا (Sahatna) — منصة حجز المواعيد الطبية
+# صحتنا (Sahatna)
 
-> منصة رقمية تربط المرضى بالأطباء والعيادات في العراق، مشابهة لتطبيق Vezeeta ومكيّفة للسوق العراقي.
+منصة عربية لحجز المواعيد الطبية في العراق، تشمل واجهة للمريض ولوحة للعيادة ولوحة للإدارة.
 
-## 🌐 الروابط
-
-- **الموقع المباشر:** https://aa183901-sys.github.io/sahhatna/
-- **المستودع:** https://github.com/aa183901-sys/sahhatna
-
-## 🚀 التشغيل السريع
-
-افتح `index.html` مباشرة في المتصفح، أو شغّل خادم محلي:
+## التشغيل المحلي
 
 ```bash
 python -m http.server 8000
-# أو
-npx serve .
 ```
 
-## 📁 هيكل المشروع
+ثم افتح `http://localhost:8000`. يبقى التطبيق في الوضع التجريبي المحلي ما دام إعداد Supabase غير مفعّل.
 
-```
-sahhatna/
-├── index.html              # تطبيق المريض
-├── clinic.html             # لوحة تحكم العيادة
-├── admin.html              # لوحة تحكم الإدارة
-├── activate.html           # تفعيل حساب العيادة
-├── my-bookings.html        # حجوزات المريض
-├── manifest.json           # PWA manifest
-├── sw.js                   # Service Worker (PWA offline)
-├── supabase-schema.sql     # SQL schema الأساسية
-├── supabase-security-hardening.sql  # تحصين RLS + جداول جديدة
-├── supabase-field-encryption.sql    # تشفير الحقول الحساسة
-├── supabase-vault-migration.sql     # استبدال المفتاح بـ Vault
-├── supabase-migration-functions.sql # دوال SQL المطلوبة
-├── supabase-rls-tests.sql           # اختبارات RLS v2
-├── fix-booking-rls.sql              # إصلاح دالة الحجز
-├── fix-auth-users.sql               # إصلاح مستخدمي المصادقة
-├── SECURITY.md                      # توثيق الأمان
-├── BACKUP-PLAN.md                   # خطة النسخ الاحتياطي
-├── css/
-│   └── styles.css          # الأنماط المخصصة
-├── js/
-│   ├── data.js             # طبقة البيانات (Supabase + localStorage)
-│   ├── supabase-config.js  # إعدادات Supabase
-│   ├── whatsapp.js         # تذكيرات واتساب
-│   ├── app.js              # منطق تطبيق المريض
-│   ├── clinic.js           # منطق لوحة العيادة
-│   ├── admin.js            # منطق لوحة الإدارة
-│   ├── activate.js         # منطق تفعيل العيادة
-│   └── my-bookings.js      # منطق حجوزات المريض
-└── supabase/functions/     # Edge Functions
-    ├── rate-limit/         # تحديد المعدل
-    └── webhook-verify/     # التحقق من توقيع webhooks
+## إعداد Supabase للإنتاج
+
+> لا تفتح الموقع للجمهور بين الخطوتين 2 و3. ملف التحصين جزء إلزامي من إنشاء القاعدة وليس ترقية اختيارية.
+
+1. أنشئ مشروع Supabase جديداً.
+2. شغّل `supabase-schema.sql` مرة واحدة من SQL Editor.
+3. شغّل `supabase-production-hardening.sql` مباشرة بعده.
+4. شغّل `supabase-rls-tests.sql`. يجب أن تنتهي جميع النتائج بـ `PASS`؛ الاختبارات تعمل داخل معاملة ويتم التراجع عنها.
+5. أنشئ مستخدم الإدارة الحقيقي من **Authentication > Users** ثم اربطه مرة واحدة من SQL Editor:
+
+```sql
+SELECT private.bootstrap_admin(
+  'AUTH-USER-UUID'::uuid,
+  'admin',
+  'اسم المدير'
+);
 ```
 
-## 🗄️ إعداد قاعدة البيانات (Supabase)
+6. اضبط `js/runtime-config.js` وقت النشر فقط:
 
-المشروع يعمل بشكل افتراضي بـ localStorage (demo mode). لتفعيل قاعدة بيانات فعلية:
+```js
+window.SAHATNA_RUNTIME_CONFIG = Object.freeze({
+  supabaseUrl: 'https://YOUR_PROJECT.supabase.co',
+  supabaseAnonKey: 'YOUR_PUBLIC_ANON_KEY',
+  supabaseEnabled: true,
+});
+```
 
-1. أنشئ مشروع على [supabase.com](https://supabase.com)
-2. اذهب إلى **SQL Editor** وشغّل ملف `supabase-schema.sql`
-3. اذهب إلى **Settings > API** وانسخ `URL` و `anon key`
-4. عدّل `js/supabase-config.js`:
-   ```js
-   const SUPABASE_CONFIG = {
-     url: 'https://YOUR_PROJECT.supabase.co',
-     anonKey: 'YOUR_ANON_KEY',
-     enabled: true,  // ← غيّر إلى true
-   };
-   ```
+لا تضع `service_role key` أو أي سر داخل ملفات الواجهة. عند تفعيل Supabase بإعداد ناقص يتوقف التطبيق برسالة واضحة بدلاً من الرجوع بصمت إلى `localStorage`.
 
-### الجداول (Tables)
-| الجدول | الوصف |
-|---|---|
-| `specialties` | التخصصات الطبية |
-| `cities` | المدن العراقية |
-| `clinics` | العيادات والمستشفيات |
-| `doctors` | الأطباء |
-| `schedules` | أوقات الدوام الأسبوعية |
-| `appointments` | الحجوزات (مع منع الحجز المزدوج) |
-| `reviews` | التقييمات (موثّقة فقط) |
-| `reminders` | تذكيرات المواعيد |
-| `clinic_users` | حسابات دخول العيادات |
-| `admin_users` | حسابات الإدارة |
+## ملفات SQL القديمة
 
-## 👥 أنواع المستخدمين
+الملفات التالية محفوظة للتاريخ فقط، وتوقفت عمداً برسالة خطأ لمنع تشغيلها على بيئة حقيقية:
 
-### 1. المريض (`index.html`)
-- بحث وفلترة متقدمة (تخصص، مدينة، سعر، تقييم، جنس، نوع خدمة)
-- بروفايل طبيب كامل مع تقييمات موثّقة
-- حجز موعد فوري مع تأكيد لحظي
-- 3 أنواع خدمات: عيادة / فيديو / منزلية
-- الدفع عند الحضور
-- تذكير عبر واتساب قبل الموعد
+- `supabase-security-hardening.sql`
+- `supabase-field-encryption.sql`
+- `supabase-vault-migration.sql`
+- `supabase-migration-functions.sql`
+- `fix-booking-rls.sql`
+- `fix-auth-users.sql`
 
-### 2. العيادة (`clinic.html`)
-| العيادة | المستخدم | كلمة المرور |
-|---|---|---|
-| مركز الشفاء | `cl1` | `1234` |
-| عيادة النور | `cl2` | `1234` |
-| مستشفى الحياة | `cl3` | `1234` |
+المسار المعتمد الوحيد هو `supabase-schema.sql` ثم `supabase-production-hardening.sql`.
 
-- إدارة الحجوزات (تأكيد/إلغاء/إكمال)
-- تقويم شهري تفاعلي
-- إدارة أوقات دوام كل طبيب
-- إرسال تذكيرات واتساب للمرضى
-- إحصائيات وإيرادات
+## الواجهات
 
-### 3. الإدارة (`admin.html`)
-**الحساب:** `admin` / `admin123`
+- `index.html`: البحث والحجز.
+- `my-bookings.html`: استرجاع الحجز برقم الحجز UUID ورقم الهاتف، مع إمكانية الإلغاء.
+- `clinic.html`: إدارة حجوزات العيادة والأطباء والدوام بعد تسجيل الدخول عبر Supabase Auth.
+- `admin.html`: الموافقات والإدارة بعد تسجيل الدخول بحساب الإدارة الحقيقي.
+- `activate.html`: ربط مستخدم Auth بطلب عيادة موافق عليه باستخدام كود تفعيل لمرة واحدة.
 
-- الموافقة/رفض العيادات الجديدة
-- عرض كل الأطباء والحجوزات
-- تحليلات بيانية (أكثر التخصصات طلباً، الإيرادات)
+## فحوصات الأمان
 
-## 📱 PWA (Progressive Web App)
+راجع [SECURITY.md](SECURITY.md) لتفاصيل نموذج الصلاحيات، التشفير، الاختبارات، وخطوات ما قبل النشر.
 
-الموقع يدعم التثبيت كتطبيق على الموبايل:
-- **Android:** Chrome → Menu → "Install app"
-- **iOS:** Safari → Share → "Add to Home Screen"
-- يعمل بدون إنترنت (Service Worker يخزن الصفحات)
-- `manifest.json` يحدد الأيقونة والألوان
+## الروابط
 
-## 📲 تذكيرات واتساب
+- الموقع: https://aa183901-sys.github.io/sahhatna/
+- المستودع: https://github.com/aa183901-sys/sahhatna
 
-بدلاً من SMS، يستخدم المشروع واتساب (أفعل في العراق):
-- `js/whatsapp.js` يفتح واتساب برسالة جاهزة
-- يحوّل أرقام العراق تلقائياً (07XX → 9647XX)
-- للإرسال التلقائي: اربط مع WhatsApp Business API أو Twilio
-
-## 🇮🇶 تكييف السوق العراقي
-
-- 12 مدينة عراقية + 12 تخصص طبي
-- الأسعار بالدينار العراقي (IQD)
-- الدفع عند الحضور كخيار أساسي
-- واجهة عربية كاملة RTL مع خط Cairo
-
-## 🔄 الترقية للإنتاج
-
-| الميزة | الحالي | الإنتاج |
-|---|---|---|
-| قاعدة البيانات | localStorage / Supabase | Supabase + Redis |
-| المصادقة | كلمة مرور بسيطة | Supabase Auth + OTP |
-| الإشعارات | واتساب يدوي | WhatsApp Business API |
-| الدفع | عند العيادة | Zain Cash / FastPay / Qi Card |
-| الفيديو | — | Agora.io / Twilio |
-| التطبيق | PWA | Flutter / React Native |
-
-## 📝 الترخيص
+## الترخيص
 
 © 2025 صحتنا — صُنع للعراق 🇮🇶

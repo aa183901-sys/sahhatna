@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
   <meta charset="UTF-8" />
@@ -38,13 +38,17 @@
       <div class="text-center mb-6">
         <div class="w-16 h-16 bg-primary-lighter text-primary rounded-2xl flex items-center justify-center text-3xl mx-auto mb-3">📋</div>
         <h2 class="text-2xl font-bold text-gray-800">حجوزاتي</h2>
-        <p class="text-gray-500 mt-1">أدخل رقم هاتفك لعرض حجوزاتك</p>
+        <p class="text-gray-500 mt-1">أدخل رقم الهاتف ورقم الحجز لحماية بياناتك</p>
       </div>
       <form onsubmit="handleLogin(event)" class="space-y-4">
         <div>
           <label class="block text-sm font-semibold text-gray-600 mb-1">رقم الهاتف</label>
           <input type="tel" id="loginPhone" required placeholder="07XX XXX XXXX" inputmode="numeric" class="form-input" />
-          <p class="text-xs text-gray-400 mt-1">نستخدم رقم هاتفك فقط لعرض حجوزاتك</p>
+        </div>
+        <div>
+          <label class="block text-sm font-semibold text-gray-600 mb-1">رقم الحجز</label>
+          <input type="text" id="loginBookingId" required placeholder="الصق رقم الحجز الظاهر بعد التأكيد" class="form-input" dir="ltr" />
+          <p class="text-xs text-gray-400 mt-1">رقم الهاتف وحده لا يكفي للوصول إلى بيانات الحجز</p>
         </div>
         <button type="submit" class="btn-primary w-full">عرض حجوزاتي</button>
       </form>
@@ -94,6 +98,7 @@
   <div id="toastContainer"></div>
 
   <!-- Scripts -->
+  <script src="js/runtime-config.js"></script>
   <script src="js/supabase-config.js"></script>
   <script src="js/data.js"></script>
   <script src="js/my-bookings.js"></script>

@@ -1,3 +1,7 @@
+DO $$ BEGIN
+  RAISE EXCEPTION 'ملف قديم ومعطّل. استخدم supabase-production-hardening.sql فقط.';
+END $$;
+
 -- ============================================================
 -- صحتنا (Sahatna) - Security Hardening Migration
 -- Run this in Supabase SQL Editor AFTER supabase-schema.sql

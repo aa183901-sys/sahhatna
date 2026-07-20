@@ -1,3 +1,7 @@
+DO $$ BEGIN
+  RAISE EXCEPTION 'ملف إصلاح قديم ومعطّل. استخدم دالة الحجز في supabase-production-hardening.sql.';
+END $$;
+
 -- ============================================================
 -- صحتنا - Fix: Secure appointment creation for anon users
 --

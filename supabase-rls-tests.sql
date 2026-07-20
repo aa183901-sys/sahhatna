@@ -1,549 +1,399 @@
 -- ============================================================
--- صحتنا (Sahatna) - RLS Policy Test Suite (v2 - Real Role Simulation)
--- Run this in Supabase SQL Editor AFTER applying:
+-- صحتنا - Production RLS and RPC test suite
+-- Run after:
 --   1. supabase-schema.sql
---   2. supabase-security-hardening.sql
---   3. supabase-field-encryption.sql
---   4. fix-booking-rls.sql
+--   2. supabase-production-hardening.sql
 --
--- PURPOSE: Verify every RLS policy works correctly with 4 roles:
---   - anon (unauthenticated visitor / patient)
---   - patient (authenticated regular user)
---   - clinic (authenticated clinic user with auth.uid())
---   - admin (authenticated admin user with auth.uid())
---
--- IMPROVEMENTS over v1:
---   - Uses request.jwt.claims to simulate REAL authenticated users
---   - Tests clinic user (cl1) can only see own clinic's appointments
---   - Tests admin can see all appointments
---   - Tests create_appointment() RPC validation
---   - Tests notifications_log RLS
---   - Real PASS/FAIL assertions (not just INFO messages)
+-- The entire suite runs inside a transaction and always rolls back.
 -- ============================================================
 
--- ============================================================
--- 0. Setup: Test helper to count rows as a specific role
--- ============================================================
+BEGIN;
 
--- Helper: set JWT claims to simulate a specific authenticated user
--- Usage: SELECT set_test_user('clinic_user_uuid_here');
-CREATE OR REPLACE FUNCTION set_test_user(p_user_id UUID)
-RETURNS VOID AS $$
+CREATE TEMP TABLE test_results (
+  test_name TEXT PRIMARY KEY,
+  passed BOOLEAN NOT NULL,
+  details TEXT NOT NULL DEFAULT ''
+);
+
+CREATE OR REPLACE FUNCTION pg_temp.record_test(
+  p_name TEXT,
+  p_passed BOOLEAN,
+  p_details TEXT DEFAULT ''
+)
+RETURNS VOID
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = pg_temp
+AS $$
+BEGIN
+  INSERT INTO test_results(test_name, passed, details)
+  VALUES (p_name, p_passed, COALESCE(p_details, ''));
+  IF p_passed THEN
+    RAISE NOTICE '✅ PASS: %', p_name;
+  ELSE
+    RAISE WARNING '❌ FAIL: % — %', p_name, p_details;
+  END IF;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION pg_temp.set_test_user(p_user_id UUID)
+RETURNS VOID
+LANGUAGE plpgsql
+AS $$
 BEGIN
   PERFORM set_config('request.jwt.claim.sub', p_user_id::TEXT, true);
   PERFORM set_config('request.jwt.claim.role', 'authenticated', true);
   PERFORM set_config('request.jwt.claim.aud', 'authenticated', true);
 END;
-$$ LANGUAGE plpgsql;
+$$;
 
--- Helper: clear JWT claims (simulate anon/unauthenticated)
-CREATE OR REPLACE FUNCTION clear_test_user()
-RETURNS VOID AS $$
+CREATE OR REPLACE FUNCTION pg_temp.clear_test_user()
+RETURNS VOID
+LANGUAGE plpgsql
+AS $$
 BEGIN
   PERFORM set_config('request.jwt.claim.sub', '', true);
   PERFORM set_config('request.jwt.claim.role', 'anon', true);
+  PERFORM set_config('request.jwt.claim.aud', 'anon', true);
 END;
-$$ LANGUAGE plpgsql;
-
--- Track test results
-CREATE TEMP TABLE IF NOT EXISTS test_results (
-  test_name TEXT,
-  passed BOOLEAN,
-  details TEXT
-);
-
--- Helper to record a test result
-CREATE OR REPLACE FUNCTION record_test(p_name TEXT, p_passed BOOLEAN, p_details TEXT DEFAULT '')
-RETURNS VOID AS $$
-BEGIN
-  INSERT INTO test_results VALUES (p_name, p_passed, p_details);
-  IF p_passed THEN
-    RAISE NOTICE '✅ PASS: %', p_name;
-  ELSE
-    RAISE NOTICE '❌ FAIL: % - %', p_name, p_details;
-  END IF;
-END;
-$$ LANGUAGE plpgsql;
+$$;
 
 -- ============================================================
--- 1. Test: Public Read Access (anon)
+-- 1. Static privilege and schema assertions
 -- ============================================================
 
 DO $$
 DECLARE
+  v_exists BOOLEAN;
   v_count INT;
 BEGIN
-  PERFORM clear_test_user();
-  SET LOCAL ROLE anon;
+  PERFORM pg_temp.record_test(
+    'anon cannot select raw appointments',
+    NOT has_table_privilege('anon', 'public.appointments', 'SELECT')
+  );
 
-  -- Test 1.1: anon can read approved clinics
-  SELECT COUNT(*) INTO v_count FROM clinics WHERE status = 'approved';
-  PERFORM record_test('anon can read approved clinics', v_count > 0, 'count=' || v_count);
+  PERFORM pg_temp.record_test(
+    'anon cannot insert raw appointments',
+    NOT has_table_privilege('anon', 'public.appointments', 'INSERT')
+  );
 
-  -- Test 1.2: anon can read doctors
-  SELECT COUNT(*) INTO v_count FROM doctors;
-  PERFORM record_test('anon can read doctors', v_count > 0, 'count=' || v_count);
+  PERFORM pg_temp.record_test(
+    'anon can select public appointment slots',
+    has_table_privilege('anon', 'public.public_appointment_slots', 'SELECT')
+  );
 
-  -- Test 1.3: anon can read specialties
-  SELECT COUNT(*) INTO v_count FROM specialties;
-  PERFORM record_test('anon can read specialties', v_count > 0, 'count=' || v_count);
+  PERFORM pg_temp.record_test(
+    'authenticated cannot mutate raw appointments',
+    NOT has_table_privilege('authenticated', 'public.appointments', 'INSERT')
+    AND NOT has_table_privilege('authenticated', 'public.appointments', 'UPDATE')
+  );
 
-  -- Test 1.4: anon can read cities
-  SELECT COUNT(*) INTO v_count FROM cities;
-  PERFORM record_test('anon can read cities', v_count > 0, 'count=' || v_count);
+  PERFORM pg_temp.record_test(
+    'authenticated cannot mutate raw doctors',
+    NOT has_table_privilege('authenticated', 'public.doctors', 'INSERT')
+    AND NOT has_table_privilege('authenticated', 'public.doctors', 'UPDATE')
+    AND NOT has_table_privilege('authenticated', 'public.doctors', 'DELETE')
+  );
 
-  -- Test 1.5: anon can read schedules
-  SELECT COUNT(*) INTO v_count FROM schedules;
-  PERFORM record_test('anon can read schedules', v_count > 0, 'count=' || v_count);
+  PERFORM pg_temp.record_test(
+    'authenticated cannot mutate raw schedules or reminders',
+    NOT has_table_privilege('authenticated', 'public.schedules', 'INSERT')
+    AND NOT has_table_privilege('authenticated', 'public.schedules', 'UPDATE')
+    AND NOT has_table_privilege('authenticated', 'public.schedules', 'DELETE')
+    AND NOT has_table_privilege('authenticated', 'public.reminders', 'INSERT')
+    AND NOT has_table_privilege('authenticated', 'public.reminders', 'UPDATE')
+    AND NOT has_table_privilege('authenticated', 'public.reminders', 'DELETE')
+  );
 
-  -- Test 1.6: anon can read reviews
-  SELECT COUNT(*) INTO v_count FROM reviews;
-  PERFORM record_test('anon can read reviews', v_count > 0, 'count=' || v_count);
+  PERFORM pg_temp.record_test(
+    'clients cannot create raw reviews or clinic mappings',
+    NOT has_table_privilege('anon', 'public.reviews', 'INSERT')
+    AND NOT has_table_privilege('authenticated', 'public.reviews', 'INSERT')
+    AND NOT has_table_privilege('authenticated', 'public.clinic_users', 'INSERT')
+  );
 
-  -- Test 1.7: anon CANNOT read appointments (should return 0)
-  SELECT COUNT(*) INTO v_count FROM appointments;
-  PERFORM record_test('anon cannot read appointments', v_count = 0, 'count=' || v_count || ' (should be 0)');
+  SELECT EXISTS (
+    SELECT 1
+    FROM information_schema.columns
+    WHERE table_schema = 'public'
+      AND table_name = 'public_clinics'
+      AND column_name = 'activation_code'
+  ) INTO v_exists;
+  PERFORM pg_temp.record_test(
+    'public clinics does not expose activation codes',
+    NOT v_exists
+  );
 
-  -- Test 1.8: anon CANNOT read reminders
-  SELECT COUNT(*) INTO v_count FROM reminders;
-  PERFORM record_test('anon cannot read reminders', v_count = 0, 'count=' || v_count || ' (should be 0)');
+  SELECT COUNT(*) INTO v_count
+  FROM pg_proc p
+  JOIN pg_namespace n ON n.oid = p.pronamespace
+  WHERE n.nspname = 'public'
+    AND p.proname = 'get_patient_bookings';
+  PERFORM pg_temp.record_test(
+    'unsafe phone-only booking RPC is absent',
+    v_count = 0,
+    'count=' || v_count
+  );
 
-  -- Test 1.9: anon CANNOT read clinic_users
-  SELECT COUNT(*) INTO v_count FROM clinic_users;
-  PERFORM record_test('anon cannot read clinic_users', v_count = 0, 'count=' || v_count || ' (should be 0)');
+  SELECT COUNT(*) INTO v_count
+  FROM information_schema.views
+  WHERE table_schema = 'public'
+    AND table_name = 'clinic_appointment_details';
+  PERFORM pg_temp.record_test(
+    'unsafe clinic appointment view is absent',
+    v_count = 0,
+    'count=' || v_count
+  );
 
-  -- Test 1.10: anon CANNOT read admin_users
-  SELECT COUNT(*) INTO v_count FROM admin_users;
-  PERFORM record_test('anon cannot read admin_users', v_count = 0, 'count=' || v_count || ' (should be 0)');
+  PERFORM pg_temp.record_test(
+    'authenticated cannot read encryption key',
+    NOT has_function_privilege(
+      'authenticated',
+      'private.get_encryption_key()',
+      'EXECUTE'
+    )
+  );
 
-  -- Test 1.11: anon CANNOT read audit_log
-  SELECT COUNT(*) INTO v_count FROM audit_log;
-  PERFORM record_test('anon cannot read audit_log', v_count = 0, 'count=' || v_count || ' (should be 0)');
-
-  -- Test 1.12: anon CANNOT read rate_limit
-  SELECT COUNT(*) INTO v_count FROM rate_limit;
-  PERFORM record_test('anon cannot read rate_limit', v_count = 0, 'count=' || v_count || ' (should be 0)');
-
-  -- Test 1.13: anon CANNOT read payments
-  SELECT COUNT(*) INTO v_count FROM payments;
-  PERFORM record_test('anon cannot read payments', v_count = 0, 'count=' || v_count || ' (should be 0)');
-
-  -- Test 1.14: anon CANNOT read notifications_log
-  SELECT COUNT(*) INTO v_count FROM notifications_log;
-  PERFORM record_test('anon cannot read notifications_log', v_count = 0, 'count=' || v_count || ' (should be 0)');
-
-  -- Test 1.15: anon CANNOT read staff_roles
-  SELECT COUNT(*) INTO v_count FROM staff_roles;
-  PERFORM record_test('anon cannot read staff_roles', v_count = 0, 'count=' || v_count || ' (should be 0)');
+  PERFORM pg_temp.record_test(
+    'anon cannot read encryption key',
+    NOT has_function_privilege(
+      'anon',
+      'private.get_encryption_key()',
+      'EXECUTE'
+    )
+  );
 END $$;
 
 -- ============================================================
--- 2. Test: Validated INSERT (anon) - should be BLOCKED
--- ============================================================
-
-DO $$
-DECLARE
-  v_success BOOLEAN;
-BEGIN
-  PERFORM clear_test_user();
-
-  -- Test 2.1: anon CANNOT insert appointment with past date via direct INSERT
-  BEGIN
-    SET LOCAL ROLE anon;
-    INSERT INTO appointments (doctor_id, clinic_id, patient_name, patient_phone, date, time, price, status)
-    VALUES ('b0000000-0000-0000-0000-000000000001', 'a0000000-0000-0000-0000-000000000001',
-            'مريض اختبار', '07701234567', '2020-01-01', '10:00', 30000, 'confirmed');
-    v_success := true;
-  EXCEPTION WHEN OTHERS THEN
-    v_success := false;
-  END;
-  PERFORM record_test('anon cannot insert appointment with past date', NOT v_success);
-
-  -- Test 2.2: anon CANNOT insert review without completed appointment
-  BEGIN
-    SET LOCAL ROLE anon;
-    INSERT INTO reviews (doctor_id, patient_name, patient_phone, rating, comment, appointment_id)
-    VALUES ('b0000000-0000-0000-0000-000000000001', 'مريض اختبار', '07701234567', 5, 'تقييم وهمي', NULL);
-    v_success := true;
-  EXCEPTION WHEN OTHERS THEN
-    v_success := false;
-  END;
-  PERFORM record_test('anon cannot insert review without appointment_id', NOT v_success);
-
-  -- Test 2.3: anon CANNOT register clinic with invalid phone
-  BEGIN
-    SET LOCAL ROLE anon;
-    INSERT INTO clinics (name, city_id, area, address, phone, status)
-    VALUES ('عيادة اختبار', 'c1', 'منطقة', 'عنوان', '123', 'pending');
-    v_success := true;
-  EXCEPTION WHEN OTHERS THEN
-    v_success := false;
-  END;
-  PERFORM record_test('anon cannot register clinic with invalid phone', NOT v_success);
-
-  -- Test 2.4: anon CANNOT register clinic with short name
-  BEGIN
-    SET LOCAL ROLE anon;
-    INSERT INTO clinics (name, city_id, area, address, phone, status)
-    VALUES ('عب', 'c1', 'منطقة', 'عنوان', '07701234567', 'pending');
-    v_success := true;
-  EXCEPTION WHEN OTHERS THEN
-    v_success := false;
-  END;
-  PERFORM record_test('anon cannot register clinic with short name', NOT v_success);
-
-  -- Test 2.5: anon CANNOT insert reminder without valid appointment
-  BEGIN
-    SET LOCAL ROLE anon;
-    INSERT INTO reminders (appointment_id, patient_name, patient_phone, doctor_name, clinic_name, date, time)
-    VALUES ('00000000-0000-0000-0000-000000000000', 'مريض', '07701234567', 'طبيب', 'عيادة', '2025-12-31', '10:00');
-    v_success := true;
-  EXCEPTION WHEN OTHERS THEN
-    v_success := false;
-  END;
-  PERFORM record_test('anon cannot insert reminder without valid appointment', NOT v_success);
-END $$;
-
--- ============================================================
--- 3. Test: create_appointment() RPC validation
+-- 2. Public registration is forced to pending
 -- ============================================================
 
 DO $$
 DECLARE
   v_result JSON;
-  v_success BOOLEAN;
+  v_status TEXT;
+  v_code TEXT;
 BEGIN
-  PERFORM clear_test_user();
-
-  -- Test 3.1: create_appointment rejects past date
-  BEGIN
-    SET LOCAL ROLE anon;
-    SELECT create_appointment(
-      'b0000000-0000-0000-0000-000000000001',
-      'a0000000-0000-0000-0000-000000000001',
-      'مريض اختبار', '07701234567', 30, 'ملاحظات',
-      '2020-01-01', '10:00', 'clinic', 30000, 'clinic'
-    ) INTO v_result;
-    v_success := true;
-  EXCEPTION WHEN OTHERS THEN
-    v_success := false;
-  END;
-  PERFORM record_test('create_appointment rejects past date', NOT v_success);
-
-  -- Test 3.2: create_appointment rejects invalid phone
-  BEGIN
-    SET LOCAL ROLE anon;
-    SELECT create_appointment(
-      'b0000000-0000-0000-0000-000000000001',
-      'a0000000-0000-0000-0000-000000000001',
-      'مريض اختبار', '123', 30, 'ملاحظات',
-      to_char(NOW() + INTERVAL '7 days', 'YYYY-MM-DD'), '10:00', 'clinic', 30000, 'clinic'
-    ) INTO v_result;
-    v_success := true;
-  EXCEPTION WHEN OTHERS THEN
-    v_success := false;
-  END;
-  PERFORM record_test('create_appointment rejects invalid phone', NOT v_success);
-
-  -- Test 3.3: create_appointment rejects non-existent doctor
-  BEGIN
-    SET LOCAL ROLE anon;
-    SELECT create_appointment(
-      '00000000-0000-0000-0000-000000000099',
-      'a0000000-0000-0000-0000-000000000001',
-      'مريض اختبار', '07701234567', 30, 'ملاحظات',
-      to_char(NOW() + INTERVAL '7 days', 'YYYY-MM-DD'), '10:00', 'clinic', 30000, 'clinic'
-    ) INTO v_result;
-    v_success := true;
-  EXCEPTION WHEN OTHERS THEN
-    v_success := false;
-  END;
-  PERFORM record_test('create_appointment rejects non-existent doctor', NOT v_success);
-
-  -- Test 3.4: create_appointment rejects doctor not in clinic
-  BEGIN
-    SET LOCAL ROLE anon;
-    SELECT create_appointment(
-      'b0000000-0000-0000-0000-000000000001',
-      'a0000000-0000-0000-0000-000000000002', -- clinic 2, but doctor belongs to clinic 1
-      'مريض اختبار', '07701234567', 30, 'ملاحظات',
-      to_char(NOW() + INTERVAL '7 days', 'YYYY-MM-DD'), '10:00', 'clinic', 30000, 'clinic'
-    ) INTO v_result;
-    v_success := true;
-  EXCEPTION WHEN OTHERS THEN
-    v_success := false;
-  END;
-  PERFORM record_test('create_appointment rejects doctor not in clinic', NOT v_success);
-
-  -- Test 3.5: create_appointment rejects negative price
-  BEGIN
-    SET LOCAL ROLE anon;
-    SELECT create_appointment(
-      'b0000000-0000-0000-0000-000000000001',
-      'a0000000-0000-0000-0000-000000000001',
-      'مريض اختبار', '07701234567', 30, 'ملاحظات',
-      to_char(NOW() + INTERVAL '7 days', 'YYYY-MM-DD'), '10:00', 'clinic', -100, 'clinic'
-    ) INTO v_result;
-    v_success := true;
-  EXCEPTION WHEN OTHERS THEN
-    v_success := false;
-  END;
-  PERFORM record_test('create_appointment rejects negative price', NOT v_success);
-
-  -- Test 3.6: create_appointment accepts valid booking
-  BEGIN
-    SET LOCAL ROLE anon;
-    SELECT create_appointment(
-      'b0000000-0000-0000-0000-000000000001',
-      'a0000000-0000-0000-0000-000000000001',
-      'مريض اختبار صالح', '07709998877', 30, 'ملاحظات اختبار',
-      to_char(NOW() + INTERVAL '7 days', 'YYYY-MM-DD'), '10:00', 'clinic', 30000, 'clinic'
-    ) INTO v_result;
-    v_success := (v_result IS NOT NULL AND v_result->>'id' IS NOT NULL);
-  EXCEPTION WHEN OTHERS THEN
-    v_success := false;
-  END;
-  PERFORM record_test('create_appointment accepts valid booking', v_success);
-
-  -- Test 3.7: create_appointment prevents double booking
-  BEGIN
-    SET LOCAL ROLE anon;
-    SELECT create_appointment(
-      'b0000000-0000-0000-0000-000000000001',
-      'a0000000-0000-0000-0000-000000000001',
-      'مريض ثاني', '07709998888', 25, 'ملاحظات',
-      to_char(NOW() + INTERVAL '7 days', 'YYYY-MM-DD'), '10:00', 'clinic', 30000, 'clinic'
-    ) INTO v_result;
-    v_success := true;
-  EXCEPTION WHEN OTHERS THEN
-    v_success := false;
-  END;
-  PERFORM record_test('create_appointment prevents double booking', NOT v_success);
-
-  -- Clean up test data
-  DELETE FROM reminders WHERE patient_phone IN ('07709998877');
-  DELETE FROM appointments WHERE patient_phone IN ('07709998877');
-END $$;
-
--- ============================================================
--- 4. Test: Clinic User Access (simulated with real auth.uid)
--- Uses cl1 user: e0000000-0000-0000-0000-000000000001
--- Linked to clinic: a0000000-0000-0000-0000-000000000001
--- ============================================================
-
-DO $$
-DECLARE
-  v_count INT;
-  v_clinic1_count INT;
-  v_clinic2_count INT;
-BEGIN
-  -- Simulate clinic user cl1
-  PERFORM set_test_user('e0000000-0000-0000-0000-000000000001');
-  SET LOCAL ROLE authenticated;
-
-  -- Test 4.1: Clinic user can read own clinic
-  SELECT COUNT(*) INTO v_count FROM clinics WHERE id = 'a0000000-0000-0000-0000-000000000001';
-  PERFORM record_test('clinic user can read own clinic', v_count = 1, 'count=' || v_count);
-
-  -- Test 4.2: Clinic user can read own clinic_users row
-  SELECT COUNT(*) INTO v_count FROM clinic_users WHERE user_id = 'e0000000-0000-0000-0000-000000000001';
-  PERFORM record_test('clinic user can read own clinic_users row', v_count = 1, 'count=' || v_count);
-
-  -- Test 4.3: Clinic user can read own appointments (via service_role to get total, then compare)
-  SET LOCAL ROLE service_role;
-  SELECT COUNT(*) INTO v_clinic1_count FROM appointments WHERE clinic_id = 'a0000000-0000-0000-0000-000000000001';
-  SELECT COUNT(*) INTO v_clinic2_count FROM appointments WHERE clinic_id = 'a0000000-0000-0000-0000-000000000002';
-
-  SET LOCAL ROLE authenticated;
-  PERFORM set_test_user('e0000000-0000-0000-0000-000000000001');
-  SELECT COUNT(*) INTO v_count FROM appointments;
-
-  -- Clinic user should see only their own clinic's appointments
-  PERFORM record_test(
-    'clinic user sees only own appointments',
-    v_count = v_clinic1_count AND v_count != (v_clinic1_count + v_clinic2_count),
-    'visible=' || v_count || ', clinic1_total=' || v_clinic1_count || ', clinic2_total=' || v_clinic2_count
-  );
-
-  -- Test 4.4: Clinic user CANNOT delete appointments
-  DECLARE
-    v_delete_success BOOLEAN := false;
-  BEGIN
-    DELETE FROM appointments WHERE id = (SELECT id FROM appointments LIMIT 1);
-    v_delete_success := true;
-  EXCEPTION WHEN OTHERS THEN
-    v_delete_success := false;
-  END;
-  PERFORM record_test('clinic user cannot delete appointments', NOT v_delete_success);
-END $$;
-
--- ============================================================
--- 5. Test: Admin Access (simulated with real auth.uid)
--- Uses admin user: e0000000-0000-0000-0000-000000000004
--- ============================================================
-
-DO $$
-DECLARE
-  v_count INT;
-BEGIN
-  -- Simulate admin user
-  PERFORM set_test_user('e0000000-0000-0000-0000-000000000004');
-  SET LOCAL ROLE authenticated;
-
-  -- Test 5.1: Admin can read all appointments
-  SELECT COUNT(*) INTO v_count FROM appointments;
-  PERFORM record_test('admin can read all appointments', v_count >= 0, 'count=' || v_count);
-
-  -- Test 5.2: Admin can read audit_log
-  SELECT COUNT(*) INTO v_count FROM audit_log;
-  PERFORM record_test('admin can read audit_log', true, 'count=' || v_count);
-
-  -- Test 5.3: Admin can read own admin_users row
-  SELECT COUNT(*) INTO v_count FROM admin_users WHERE user_id = 'e0000000-0000-0000-0000-000000000004';
-  PERFORM record_test('admin can read own admin_users row', v_count = 1, 'count=' || v_count);
-
-  -- Test 5.4: Admin can read all clinics (including pending)
-  SELECT COUNT(*) INTO v_count FROM clinics;
-  PERFORM record_test('admin can read all clinics', v_count >= 0, 'count=' || v_count);
-END $$;
-
--- ============================================================
--- 6. Test: Rate Limiting Function
--- ============================================================
-
-DO $$
-DECLARE
-  v_result BOOLEAN;
-BEGIN
-  SET LOCAL ROLE service_role;
-
-  -- Test 6.1: check_rate_limit allows first request
-  SELECT check_rate_limit('test_ip_v2_123', 'login', 3, 15) INTO v_result;
-  PERFORM record_test('check_rate_limit allows first request', v_result = true);
-
-  -- Test 6.2: check_rate_limit allows second request
-  SELECT check_rate_limit('test_ip_v2_123', 'login', 3, 15) INTO v_result;
-  PERFORM record_test('check_rate_limit allows second request', v_result = true);
-
-  -- Test 6.3: check_rate_limit allows third request
-  SELECT check_rate_limit('test_ip_v2_123', 'login', 3, 15) INTO v_result;
-  PERFORM record_test('check_rate_limit allows third request', v_result = true);
-
-  -- Test 6.4: check_rate_limit blocks fourth request (exceeded 3)
-  SELECT check_rate_limit('test_ip_v2_123', 'login', 3, 15) INTO v_result;
-  PERFORM record_test('check_rate_limit blocks fourth request', v_result = false);
-
-  -- Clean up
-  DELETE FROM rate_limit WHERE identifier = 'test_ip_v2_123';
-END $$;
-
--- ============================================================
--- 7. Test: Audit Logging Function
--- ============================================================
-
-DO $$
-DECLARE
-  v_id UUID;
-BEGIN
-  SET LOCAL ROLE service_role;
-
-  -- Test 7.1: log_audit_entry creates entry
-  SELECT log_audit_entry('test.action.v2', 'test_table', NULL, '{"test":true}'::JSONB, 'system') INTO v_id;
-  PERFORM record_test('log_audit_entry creates entry', v_id IS NOT NULL, 'id=' || v_id);
-
-  -- Clean up
-  DELETE FROM audit_log WHERE id = v_id;
-END $$;
-
--- ============================================================
--- 8. Test: Secure Views
--- ============================================================
-
-DO $$
-DECLARE
-  v_count INT;
-BEGIN
-  PERFORM clear_test_user();
+  PERFORM pg_temp.clear_test_user();
   SET LOCAL ROLE anon;
 
-  -- Test 8.1: public_appointment_slots view works for anon
-  SELECT COUNT(*) INTO v_count FROM public_appointment_slots;
-  PERFORM record_test('anon can read public_appointment_slots', true, 'count=' || v_count);
+  SELECT public.register_clinic(
+    'عيادة اختبار أمان', 'c1', 'الكرادة', 'عنوان تجريبي',
+    '07709990001', 0, 0
+  ) INTO v_result;
 
-  -- Test 8.2: public_doctor_summary view works for anon
-  SELECT COUNT(*) INTO v_count FROM public_doctor_summary;
-  PERFORM record_test('anon can read public_doctor_summary', v_count > 0, 'count=' || v_count);
+  RESET ROLE;
+  SELECT status, activation_code INTO v_status, v_code
+  FROM public.clinics
+  WHERE id = (v_result->>'id')::UUID;
 
-  -- Test 8.3: public_doctor_summary only shows approved clinics
-  SELECT COUNT(*) INTO v_count FROM public_doctor_summary
-  WHERE clinic_id NOT IN (SELECT id FROM clinics WHERE status = 'approved');
-  PERFORM record_test('public_doctor_summary only shows approved clinics', v_count = 0, 'non-approved count=' || v_count);
+  PERFORM pg_temp.record_test(
+    'public clinic registration is pending with no activation code',
+    v_status = 'pending' AND v_code IS NULL,
+    'status=' || COALESCE(v_status, 'NULL')
+  );
 END $$;
 
 -- ============================================================
--- 9. Test: Double Booking Prevention (unique index)
+-- 3. Booking validation, encryption, privacy, and cancellation
 -- ============================================================
 
 DO $$
 DECLARE
+  v_date DATE;
+  v_day INT;
+  v_time TEXT;
+  v_booking JSON;
+  v_booking_id UUID;
+  v_result JSON;
   v_success BOOLEAN;
+  v_plain TEXT;
+  v_cipher BYTEA;
 BEGIN
-  SET LOCAL ROLE service_role;
+  -- Find the next scheduled day for the first seeded doctor.
+  SELECT gs::DATE, s.day, s.start_time
+  INTO v_date, v_day, v_time
+  FROM generate_series(CURRENT_DATE + 1, CURRENT_DATE + 14, INTERVAL '1 day') gs
+  JOIN public.schedules s
+    ON s.doctor_id = 'b0000000-0000-0000-0000-000000000001'
+   AND s.day = EXTRACT(DOW FROM gs)::INT
+  ORDER BY gs
+  LIMIT 1;
+
+  IF v_date IS NULL THEN
+    RAISE EXCEPTION 'Seeded doctor has no future schedule for booking tests';
+  END IF;
+
+  PERFORM pg_temp.clear_test_user();
+  SET LOCAL ROLE anon;
 
   BEGIN
-    -- Insert first appointment
-    INSERT INTO appointments (doctor_id, clinic_id, patient_name, patient_phone, date, time, price, status)
-    VALUES ('b0000000-0000-0000-0000-000000000001', 'a0000000-0000-0000-0000-000000000001',
-            'مريض 1', '07701110001', '2099-12-31', '10:00', 30000, 'confirmed');
-    -- Try duplicate
-    INSERT INTO appointments (doctor_id, clinic_id, patient_name, patient_phone, date, time, price, status)
-    VALUES ('b0000000-0000-0000-0000-000000000001', 'a0000000-0000-0000-0000-000000000001',
-            'مريض 2', '07701110002', '2099-12-31', '10:00', 30000, 'confirmed');
+    SELECT public.create_appointment(
+      'b0000000-0000-0000-0000-000000000001',
+      'a0000000-0000-0000-0000-000000000001',
+      'مريض اختبار', '07709990002', 30, 'ملاحظة طبية سرية',
+      v_date::TEXT, '29:30', 'clinic', 30000, 'clinic'
+    ) INTO v_result;
     v_success := true;
-  EXCEPTION WHEN unique_violation THEN
+  EXCEPTION WHEN OTHERS THEN
     v_success := false;
   END;
-  PERFORM record_test('unique index prevents double booking', NOT v_success);
+  RESET ROLE;
+  PERFORM pg_temp.record_test('booking rejects invalid time', NOT v_success);
 
-  -- Clean up
-  DELETE FROM appointments WHERE date = '2099-12-31' AND patient_phone IN ('07701110001','07701110002');
+  PERFORM pg_temp.clear_test_user();
+  SET LOCAL ROLE anon;
+  BEGIN
+    SELECT public.create_appointment(
+      'b0000000-0000-0000-0000-000000000001',
+      'a0000000-0000-0000-0000-000000000001',
+      'مريض اختبار', '07709990002', 30, 'ملاحظة طبية سرية',
+      v_date::TEXT, v_time, 'clinic', 1, 'clinic'
+    ) INTO v_result;
+    v_success := true;
+  EXCEPTION WHEN OTHERS THEN
+    v_success := false;
+  END;
+  RESET ROLE;
+  PERFORM pg_temp.record_test('booking rejects client price tampering', NOT v_success);
+
+  PERFORM pg_temp.clear_test_user();
+  SET LOCAL ROLE anon;
+  SELECT public.create_appointment(
+    'b0000000-0000-0000-0000-000000000001',
+    'a0000000-0000-0000-0000-000000000001',
+    'مريض اختبار', '07709990002', 30, 'ملاحظة طبية سرية',
+    v_date::TEXT, v_time, 'clinic', 30000, 'clinic'
+  ) INTO v_booking;
+  RESET ROLE;
+
+  v_booking_id := (v_booking->>'id')::UUID;
+  SELECT patient_notes, patient_notes_encrypted
+  INTO v_plain, v_cipher
+  FROM public.appointments WHERE id = v_booking_id;
+
+  PERFORM pg_temp.record_test(
+    'medical note is encrypted and plaintext is cleared',
+    v_plain = '[محمي]' AND v_cipher IS NOT NULL
+  );
+
+  PERFORM pg_temp.clear_test_user();
+  SET LOCAL ROLE anon;
+  SELECT public.get_patient_booking(v_booking_id, '07709990003') INTO v_result;
+  RESET ROLE;
+  PERFORM pg_temp.record_test(
+    'wrong phone cannot retrieve booking',
+    v_result IS NULL
+  );
+
+  PERFORM pg_temp.clear_test_user();
+  SET LOCAL ROLE anon;
+  SELECT public.get_patient_booking(v_booking_id, '07709990002') INTO v_result;
+  RESET ROLE;
+  PERFORM pg_temp.record_test(
+    'booking ID plus phone retrieves and decrypts own note',
+    v_result->>'patient_notes' = 'ملاحظة طبية سرية'
+  );
+
+  PERFORM pg_temp.clear_test_user();
+  SET LOCAL ROLE anon;
+  BEGIN
+    SELECT public.cancel_patient_booking(v_booking_id, '07709990003') INTO v_result;
+    v_success := true;
+  EXCEPTION WHEN OTHERS THEN
+    v_success := false;
+  END;
+  RESET ROLE;
+  PERFORM pg_temp.record_test('wrong phone cannot cancel booking', NOT v_success);
+
+  PERFORM pg_temp.clear_test_user();
+  SET LOCAL ROLE anon;
+  SELECT public.cancel_patient_booking(v_booking_id, '07709990002') INTO v_result;
+  RESET ROLE;
+  PERFORM pg_temp.record_test(
+    'booking ID plus phone can cancel own future booking',
+    v_result->>'status' = 'cancelled'
+  );
 END $$;
 
 -- ============================================================
--- 10. Test: Review Uniqueness (one review per appointment)
+-- 4. Clinic isolation
 -- ============================================================
 
 DO $$
 DECLARE
-  v_apt_id UUID;
+  v_visible INT;
+  v_wrong_clinic INT;
+  v_reminder_id UUID;
+  v_result JSON;
   v_success BOOLEAN;
 BEGIN
-  SET LOCAL ROLE service_role;
+  INSERT INTO auth.users (
+    instance_id, id, aud, role, email, encrypted_password,
+    email_confirmed_at, created_at, updated_at,
+    confirmation_token, recovery_token, email_change_token_new, email_change,
+    raw_app_meta_data, raw_user_meta_data, is_super_admin
+  ) VALUES (
+    '00000000-0000-0000-0000-000000000000',
+    'f0000000-0000-0000-0000-000000000001',
+    'authenticated', 'authenticated',
+    'rls-clinic-test@sahatna.invalid', crypt('temporary-test-only', gen_salt('bf')),
+    NOW(), NOW(), NOW(), '', '', '', '',
+    '{"provider":"email","providers":["email"]}', '{}', false
+  ) ON CONFLICT (id) DO NOTHING;
 
-  -- Create a completed appointment
-  INSERT INTO appointments (doctor_id, clinic_id, patient_name, patient_phone, date, time, price, status)
-  VALUES ('b0000000-0000-0000-0000-000000000001', 'a0000000-0000-0000-0000-000000000001',
-          'مريض تقييم', '07701110003', '2099-12-30', '11:00', 30000, 'completed')
-  RETURNING id INTO v_apt_id;
+  INSERT INTO public.clinic_users (clinic_id, user_id, username, name)
+  VALUES (
+    'a0000000-0000-0000-0000-000000000001',
+    'f0000000-0000-0000-0000-000000000001',
+    'rls_clinic_test', 'RLS Clinic Test'
+  ) ON CONFLICT (username) DO NOTHING;
+
+  PERFORM pg_temp.set_test_user('f0000000-0000-0000-0000-000000000001');
+  SET LOCAL ROLE authenticated;
+
+  SELECT COUNT(*), COUNT(*) FILTER (
+    WHERE clinic_id <> 'a0000000-0000-0000-0000-000000000001'
+  )
+  INTO v_visible, v_wrong_clinic
+  FROM public.get_clinic_appointments();
+
+  SELECT r.id INTO v_reminder_id
+  FROM public.reminders r
+  JOIN public.appointments a ON a.id = r.appointment_id
+  WHERE a.clinic_id = 'a0000000-0000-0000-0000-000000000001'
+  ORDER BY r.created_at DESC
+  LIMIT 1;
+
+  SELECT public.mark_reminder_sent(v_reminder_id) INTO v_result;
 
   BEGIN
-    INSERT INTO reviews (doctor_id, patient_name, patient_phone, rating, comment, appointment_id)
-    VALUES ('b0000000-0000-0000-0000-000000000001', 'مريض تقييم', '07701110003', 5, 'تقييم 1', v_apt_id);
-    INSERT INTO reviews (doctor_id, patient_name, patient_phone, rating, comment, appointment_id)
-    VALUES ('b0000000-0000-0000-0000-000000000001', 'مريض تقييم', '07701110003', 4, 'تقييم 2', v_apt_id);
+    PERFORM public.log_audit_entry(
+      'forged.action', 'appointments', NULL, '{}'::JSONB, 'clinic'
+    );
     v_success := true;
-  EXCEPTION WHEN unique_violation THEN
+  EXCEPTION WHEN OTHERS THEN
     v_success := false;
   END;
-  PERFORM record_test('cannot create two reviews for same appointment', NOT v_success);
 
-  -- Clean up
-  DELETE FROM reviews WHERE patient_phone = '07701110003';
-  DELETE FROM appointments WHERE patient_phone = '07701110003';
+  RESET ROLE;
+  PERFORM pg_temp.record_test(
+    'clinic RPC never returns another clinic appointments',
+    v_wrong_clinic = 0,
+    'visible=' || v_visible || ', wrong_clinic=' || v_wrong_clinic
+  );
+  PERFORM pg_temp.record_test(
+    'clinic can mark only an owned reminder through RPC',
+    v_result->>'id' = v_reminder_id::TEXT AND (v_result->>'sent')::BOOLEAN
+  );
+  PERFORM pg_temp.record_test(
+    'clinic cannot forge audit log entries',
+    NOT v_success
+  );
 END $$;
 
 -- ============================================================
--- 11. Summary
+-- 5. Summary and hard failure on any failed assertion
 -- ============================================================
 
 DO $$
@@ -551,37 +401,23 @@ DECLARE
   v_total INT;
   v_passed INT;
   v_failed INT;
+  v_failed_names TEXT;
 BEGIN
-  SELECT COUNT(*), COUNT(*) FILTER (WHERE passed), COUNT(*) FILTER (WHERE NOT passed)
-  INTO v_total, v_passed, v_failed
+  SELECT
+    COUNT(*),
+    COUNT(*) FILTER (WHERE passed),
+    COUNT(*) FILTER (WHERE NOT passed),
+    string_agg(test_name, ' | ') FILTER (WHERE NOT passed)
+  INTO v_total, v_passed, v_failed, v_failed_names
   FROM test_results;
 
-  RAISE NOTICE '';
   RAISE NOTICE '============================================================';
-  RAISE NOTICE 'RLS Test Suite v2 Complete';
-  RAISE NOTICE '============================================================';
-  RAISE NOTICE 'Total tests: %', v_total;
-  RAISE NOTICE 'Passed: %', v_passed;
-  RAISE NOTICE 'Failed: %', v_failed;
+  RAISE NOTICE 'RLS tests: total=%, passed=%, failed=%', v_total, v_passed, v_failed;
   RAISE NOTICE '============================================================';
 
   IF v_failed > 0 THEN
-    RAISE NOTICE '❌ FAILED TESTS:';
-    FOR v_total IN SELECT row_number() OVER () FROM test_results WHERE NOT passed LOOP
-      NULL;
-    END LOOP;
-    SELECT string_agg(test_name, ' | ') INTO v_total FROM test_results WHERE NOT passed;
-    RAISE NOTICE '%', v_total;
-  ELSE
-    RAISE NOTICE '✅ ALL TESTS PASSED!';
+    RAISE EXCEPTION 'RLS TESTS FAILED: %', v_failed_names;
   END IF;
-  RAISE NOTICE '============================================================';
 END $$;
 
--- ============================================================
--- 12. Cleanup: Drop test helper functions
--- ============================================================
-DROP FUNCTION IF EXISTS set_test_user(UUID);
-DROP FUNCTION IF EXISTS clear_test_user();
-DROP FUNCTION IF EXISTS record_test(TEXT, BOOLEAN, TEXT);
-DROP TABLE IF EXISTS test_results;
+ROLLBACK;

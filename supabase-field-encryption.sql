@@ -1,3 +1,7 @@
+DO $$ BEGIN
+  RAISE EXCEPTION 'ملف تشفير قديم ومعطّل لتجنب تلف الملاحظات. استخدم supabase-production-hardening.sql.';
+END $$;
+
 -- ============================================================
 -- صحتنا (Sahatna) - Field-Level Encryption Migration
 -- Run this in Supabase SQL Editor AFTER supabase-security-hardening.sql
