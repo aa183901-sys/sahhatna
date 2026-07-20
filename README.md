@@ -17,7 +17,7 @@ python -m http.server 8000
 1. أنشئ مشروع Supabase جديداً.
 2. شغّل `supabase-schema.sql` مرة واحدة من SQL Editor.
 3. شغّل `supabase-production-hardening.sql` مباشرة بعده.
-4. شغّل `supabase-rls-tests.sql`. يجب أن تنتهي جميع النتائج بـ `PASS`؛ الاختبارات تعمل داخل معاملة ويتم التراجع عنها.
+4. شغّل `supabase-rls-tests.sql`. الملف عبارة عن أمر ذري واحد مناسب لـ SQL Editor؛ يحذف بيانات الاختبار عند النجاح ويتراجع عنها تلقائياً عند الفشل.
 5. أنشئ مستخدم الإدارة الحقيقي من **Authentication > Users** ثم اربطه مرة واحدة من SQL Editor:
 
 ```sql
