@@ -337,7 +337,8 @@ BEGIN
     '00000000-0000-0000-0000-000000000000',
     'f0000000-0000-0000-0000-000000000001',
     'authenticated', 'authenticated',
-    'rls-clinic-test@sahatna.invalid', crypt('temporary-test-only', gen_salt('bf')),
+    'rls-clinic-test@sahatna.invalid',
+    extensions.crypt('temporary-test-only', extensions.gen_salt('bf')),
     NOW(), NOW(), NOW(), '', '', '', '',
     '{"provider":"email","providers":["email"]}', '{}', false
   ) ON CONFLICT (id) DO NOTHING;
