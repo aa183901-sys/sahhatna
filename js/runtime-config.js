@@ -5,7 +5,7 @@
  * this file after the database migration and RLS tests have passed.
  */
 window.SAHATNA_RUNTIME_CONFIG = Object.freeze({
-  supabaseUrl: '',
+  supabaseUrl: 'https://wydmhiqftmiqkfahypzn.supabase.co',
   supabaseAnonKey: '',
   supabaseEnabled: false,
 });
