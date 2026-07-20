@@ -26,7 +26,7 @@ SECURITY DEFINER
 SET search_path = pg_temp
 AS $$
 BEGIN
-  INSERT INTO test_results(test_name, passed, details)
+  INSERT INTO pg_temp.test_results(test_name, passed, details)
   VALUES (p_name, p_passed, COALESCE(p_details, ''));
   IF p_passed THEN
     RAISE NOTICE '✅ PASS: %', p_name;
@@ -410,7 +410,7 @@ BEGIN
     COUNT(*) FILTER (WHERE NOT passed),
     string_agg(test_name, ' | ') FILTER (WHERE NOT passed)
   INTO v_total, v_passed, v_failed, v_failed_names
-  FROM test_results;
+  FROM pg_temp.test_results;
 
   RAISE NOTICE '============================================================';
   RAISE NOTICE 'RLS tests: total=%, passed=%, failed=%', v_total, v_passed, v_failed;
