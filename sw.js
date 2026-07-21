@@ -3,7 +3,7 @@
  * Enables offline functionality and install-to-home-screen
  */
 
-const CACHE_NAME = 'sahatna-v13';
+const CACHE_NAME = 'sahatna-v14';
 const ASSETS = [
   './',
   './index.html',
@@ -19,7 +19,9 @@ const ASSETS = [
   './404.html',
   './robots.txt',
   './sitemap.xml',
+  './css/tailwind.generated.css',
   './css/styles.css',
+  './css/mobile.css',
   './js/data.js',
   './js/app.js',
   './js/clinic.js',
