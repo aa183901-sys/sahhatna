@@ -455,7 +455,12 @@ const SahatnaDB = (function () {
         p_activation_code: activationCode,
         p_username: username,
       });
-      if (activationError) throw new Error('فشل التفعيل: ' + activationError.message);
+      if (activationError) {
+        if (/رمز التفعيل|اسم العيادة/i.test(activationError.message)) {
+          throw new Error('اسم العيادة أو الكود غير مطابق. افتح رابط التفعيل الكامل المرسل من الإدارة.');
+        }
+        throw new Error('فشل التفعيل: ' + activationError.message);
+      }
       invalidateCache();
       return { success: true, clinic: mapClinic(clinic) };
     }
