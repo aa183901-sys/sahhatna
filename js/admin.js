@@ -5,6 +5,8 @@
  */
 
 let currentAdmin = null;
+let activeClinicApproval = null;
+let approvalDialogPreviousFocus = null;
 
 const escapeHTML = (value) => SahatnaDB.escapeHTML(value);
 const safeImageURL = (value) => SahatnaDB.safeImageURL(value);
@@ -21,6 +23,95 @@ function showToast(message, type = 'success') {
   toast.textContent = message;
   container.appendChild(toast);
   setTimeout(() => { toast.style.opacity = '0'; toast.style.transition = 'opacity 0.3s'; setTimeout(() => toast.remove(), 300); }, 3000);
+}
+
+function normalizeWhatsAppPhone(phone) {
+  let digits = String(phone || '').replace(/\D/g, '');
+  if (!digits) return '';
+  if (digits.startsWith('00')) digits = digits.slice(2);
+  if (digits.startsWith('964')) return digits;
+  if (digits.startsWith('0')) return `964${digits.slice(1)}`;
+  if (digits.length === 10 && digits.startsWith('7')) return `964${digits}`;
+  return digits;
+}
+
+function getClinicActivationMessage(clinicName, code) {
+  const activationURL = new URL('activate.html', window.location.href).href;
+  return [
+    `مرحباً، تمت الموافقة على عيادتكم «${clinicName}» في منصة صحتنا.`,
+    `كود التفعيل: ${code}`,
+    `رابط التفعيل: ${activationURL}`,
+    'ملاحظة: كود التفعيل مخصص للاستخدام مرة واحدة.',
+  ].join('\n');
+}
+
+function openClinicApprovalDialog(clinic, code) {
+  const dialog = document.getElementById('clinicApprovalDialog');
+  if (!dialog) return;
+
+  const clinicName = clinic?.name || 'العيادة';
+  const phone = normalizeWhatsAppPhone(clinic?.phone);
+  activeClinicApproval = { clinicName, code, phone };
+  approvalDialogPreviousFocus = document.activeElement;
+
+  document.getElementById('approvedClinicName').textContent = clinicName;
+  document.getElementById('approvedClinicCode').textContent = code;
+  const whatsappButton = document.getElementById('sendClinicCodeWhatsApp');
+  whatsappButton.disabled = !phone;
+  whatsappButton.title = phone ? '' : 'لا يوجد رقم هاتف صالح لهذه العيادة';
+
+  dialog.classList.remove('hidden');
+  dialog.setAttribute('aria-hidden', 'false');
+  document.body.classList.add('dialog-open');
+  document.getElementById('copyClinicCode')?.focus();
+}
+
+function closeClinicApprovalDialog() {
+  const dialog = document.getElementById('clinicApprovalDialog');
+  if (!dialog || dialog.classList.contains('hidden')) return;
+  dialog.classList.add('hidden');
+  dialog.setAttribute('aria-hidden', 'true');
+  document.body.classList.remove('dialog-open');
+  activeClinicApproval = null;
+  approvalDialogPreviousFocus?.focus?.();
+  approvalDialogPreviousFocus = null;
+}
+
+async function copyClinicActivationCode() {
+  if (!activeClinicApproval?.code) return;
+  const code = activeClinicApproval.code;
+  try {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(code);
+    } else {
+      const input = document.createElement('textarea');
+      input.value = code;
+      input.setAttribute('readonly', '');
+      input.style.position = 'fixed';
+      input.style.opacity = '0';
+      document.body.appendChild(input);
+      input.select();
+      document.execCommand('copy');
+      input.remove();
+    }
+    showToast('تم نسخ كود التفعيل', 'success');
+  } catch (error) {
+    console.error('Copy activation code failed:', error);
+    showToast('تعذر النسخ تلقائياً. ظلل الكود وانسخه', 'error');
+  }
+}
+
+function sendClinicActivationViaWhatsApp() {
+  if (!activeClinicApproval?.phone) {
+    showToast('لا يوجد رقم هاتف صالح لهذه العيادة', 'error');
+    return;
+  }
+  const message = getClinicActivationMessage(
+    activeClinicApproval.clinicName,
+    activeClinicApproval.code
+  );
+  const url = `https://wa.me/${activeClinicApproval.phone}?text=${encodeURIComponent(message)}`;
+  window.open(url, '_blank', 'noopener,noreferrer');
 }
 
 function formatPrice(price) { return new Intl.NumberFormat('ar-IQ').format(price) + ' د.ع'; }
@@ -195,12 +286,18 @@ async function renderAdminClinics() {
 }
 
 async function approveClinic(clinicId) {
-  const clinic = await SahatnaDB.approveClinic(clinicId);
-  await renderAdminClinics();
-  await renderAdminStats();
-  const code = clinic.activationCode || clinic.activation_code;
-  showToast(`تمت الموافقة على العيادة. كود التفعيل: ${code}`, 'success');
-  alert(`تمت الموافقة على العيادة بنجاح!\n\nكود التفعيل: ${code}\n\nانسخ هذا الكود وأعطه للعيادة لتفعيل حسابها.`);
+  try {
+    const clinic = await SahatnaDB.approveClinic(clinicId);
+    const code = clinic?.activationCode || clinic?.activation_code;
+    if (!clinic || !code) throw new Error('لم يرجع كود التفعيل من الخادم');
+    await renderAdminClinics();
+    await renderAdminStats();
+    showToast('تمت الموافقة على العيادة بنجاح', 'success');
+    openClinicApprovalDialog(clinic, code);
+  } catch (error) {
+    console.error('Clinic approval failed:', error);
+    showToast('تعذرت الموافقة على العيادة. حاول مرة أخرى', 'error');
+  }
 }
 
 async function rejectClinic(clinicId) {
@@ -412,5 +509,9 @@ document.addEventListener('DOMContentLoaded', () => {
   checkAdminSession().catch((error) => {
     console.error('Admin session check failed:', error);
     showToast('تعذر التحقق من جلسة الإدارة', 'error');
+  });
+
+  document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape') closeClinicApprovalDialog();
   });
 });
