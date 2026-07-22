@@ -86,3 +86,110 @@ video {
     font-size: 1rem;
   }
 }
+
+
+/* Compact authentication and dashboard layout on phones. */
+@media (max-width: 640px) {
+  .auth-shell {
+    min-height: 100dvh;
+    align-items: flex-start;
+    padding: 12px 10px !important;
+  }
+
+  .auth-card {
+    width: 100%;
+    max-width: 420px;
+    padding: 18px !important;
+    border-radius: 18px !important;
+    box-shadow: 0 10px 28px rgba(15, 118, 110, 0.12) !important;
+  }
+
+  .auth-header {
+    margin-bottom: 14px !important;
+  }
+
+  .auth-icon {
+    width: 50px !important;
+    height: 50px !important;
+    margin-bottom: 8px !important;
+    border-radius: 14px !important;
+    font-size: 1.5rem !important;
+  }
+
+  .auth-header h1 {
+    font-size: 1.25rem !important;
+    line-height: 1.45;
+  }
+
+  .auth-header p {
+    margin-top: 2px !important;
+    font-size: 0.82rem;
+    line-height: 1.55;
+  }
+
+  .auth-form > :not([hidden]) ~ :not([hidden]) {
+    margin-top: 0.65rem !important;
+  }
+
+  .auth-form label {
+    margin-bottom: 3px !important;
+    font-size: 0.78rem !important;
+  }
+
+  .auth-form .form-input {
+    min-height: 46px;
+    padding: 8px 12px;
+    border-width: 1px;
+    border-radius: 9px;
+  }
+
+  .auth-form #activateCode {
+    font-size: 1.125rem !important;
+    letter-spacing: 0.22em !important;
+  }
+
+  .auth-form p.text-xs {
+    margin-top: 2px !important;
+    font-size: 0.68rem !important;
+    line-height: 1.45;
+  }
+
+  .auth-help {
+    margin-top: 14px !important;
+    padding: 11px 12px !important;
+    font-size: 0.76rem !important;
+    line-height: 1.6;
+  }
+
+  .auth-card > .mt-4 {
+    margin-top: 12px !important;
+  }
+
+  #dashboard .stat-card {
+    padding: 12px;
+    border-radius: 12px;
+  }
+
+  #dashboard .stat-card .text-3xl {
+    font-size: 1.45rem;
+  }
+
+  #dashboard .tab-btn {
+    padding: 9px 14px;
+    font-size: 0.84rem;
+  }
+}
+
+@media (max-width: 380px) {
+  .auth-shell {
+    padding-inline: 8px !important;
+  }
+
+  .auth-card {
+    padding: 15px !important;
+  }
+
+  .auth-header p {
+    font-size: 0.76rem;
+  }
+}
