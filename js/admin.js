@@ -60,6 +60,28 @@ async function handleAdminLogin(event) {
   }
 }
 
+
+async function requestAdminPasswordReset() {
+  const email = document.getElementById('adminUsername').value.trim();
+
+  if (!/^\S+@\S+\.\S+$/.test(email)) {
+    showToast('اكتب بريد حساب الإدارة أولاً', 'error');
+    document.getElementById('adminUsername').focus();
+    return;
+  }
+
+  try {
+    const client = await initSupabase();
+    const redirectTo = new URL('reset-password.html', window.location.href).href;
+    const { error } = await client.auth.resetPasswordForEmail(email, { redirectTo });
+    if (error) throw error;
+    showToast('تم إرسال رابط الاستعادة. افتح أحدث رسالة في بريدك', 'success');
+  } catch (error) {
+    console.error('Password recovery request failed:', error);
+    showToast('تعذر إرسال رابط الاستعادة. حاول بعد قليل', 'error');
+  }
+}
+
 async function adminLogout() {
   await SahatnaDB.signOut();
   sessionStorage.removeItem('sahatna_admin');

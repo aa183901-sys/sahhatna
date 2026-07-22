@@ -3,12 +3,13 @@
  * Enables offline functionality and install-to-home-screen
  */
 
-const CACHE_NAME = 'sahatna-v14';
+const CACHE_NAME = 'sahatna-v15';
 const ASSETS = [
   './',
   './index.html',
   './clinic.html',
   './admin.html',
+  './reset-password.html',
   './activate.html',
   './my-bookings.html',
   './about.html',
@@ -26,6 +27,7 @@ const ASSETS = [
   './js/app.js',
   './js/clinic.js',
   './js/admin.js',
+  './js/reset-password.js',
   './js/activate.js',
   './js/my-bookings.js',
   './js/runtime-config.js',
