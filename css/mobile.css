@@ -193,3 +193,76 @@ video {
     font-size: 0.76rem;
   }
 }
+
+/* Extra-compact activation flow for narrow phones. */
+@media (max-width: 640px) {
+  body:has(.auth-card--activation) {
+    background: #fff !important;
+  }
+
+  .auth-card--activation {
+    max-width: none;
+    padding: 10px 12px 12px !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+  }
+
+  .auth-card--activation .auth-icon {
+    display: none !important;
+  }
+
+  .auth-card--activation .auth-header {
+    margin-bottom: 8px !important;
+  }
+
+  .auth-card--activation .auth-header h1 {
+    font-size: 1.12rem !important;
+  }
+
+  .auth-card--activation .auth-header p {
+    display: none;
+  }
+
+  .auth-card--activation .auth-form > :not([hidden]) ~ :not([hidden]) {
+    margin-top: 0.42rem !important;
+  }
+
+  .auth-card--activation .auth-form label {
+    font-size: 0.72rem !important;
+    line-height: 1.35;
+  }
+
+  .auth-card--activation .auth-form .form-input {
+    min-height: 42px;
+    padding-block: 6px;
+  }
+
+  .auth-card--activation .auth-form p.text-xs {
+    display: none;
+  }
+
+  .activation-password-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 8px;
+  }
+
+  .auth-card--activation .auth-help {
+    display: none;
+  }
+
+  .auth-card--activation > .mt-4 {
+    margin-top: 8px !important;
+  }
+
+  .auth-card--activation > .mt-4 a {
+    font-size: 0.72rem;
+  }
+}
+
+@media (max-width: 340px) {
+  .activation-password-grid {
+    grid-template-columns: 1fr;
+    gap: 6px;
+  }
+}
