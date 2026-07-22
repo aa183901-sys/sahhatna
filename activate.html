@@ -49,13 +49,15 @@
           <input type="email" id="activateEmail" required autocomplete="email" placeholder="clinic@example.com" class="form-input" dir="ltr" />
           <p class="text-xs text-gray-400 mt-1">يُستخدم لتأكيد الحساب واستعادته</p>
         </div>
-        <div>
-          <label class="block text-sm font-semibold text-gray-600 mb-1">كلمة المرور <span class="text-danger">*</span></label>
-          <input type="password" id="activatePassword" required minlength="8" autocomplete="new-password" placeholder="••••••••" class="form-input" />
-        </div>
-        <div>
-          <label class="block text-sm font-semibold text-gray-600 mb-1">تأكيد كلمة المرور <span class="text-danger">*</span></label>
-          <input type="password" id="activatePasswordConfirm" required minlength="8" autocomplete="new-password" placeholder="••••••••" class="form-input" />
+        <div class="activation-password-grid">
+          <div>
+            <label class="block text-sm font-semibold text-gray-600 mb-1">كلمة المرور <span class="text-danger">*</span></label>
+            <input type="password" id="activatePassword" required minlength="8" autocomplete="new-password" placeholder="••••••••" class="form-input" />
+          </div>
+          <div>
+            <label class="block text-sm font-semibold text-gray-600 mb-1">تأكيد كلمة المرور <span class="text-danger">*</span></label>
+            <input type="password" id="activatePasswordConfirm" required minlength="8" autocomplete="new-password" placeholder="••••••••" class="form-input" />
+          </div>
         </div>
         <button type="submit" id="activateBtn" class="btn-primary w-full">تفعيل الحساب</button>
       </form>
