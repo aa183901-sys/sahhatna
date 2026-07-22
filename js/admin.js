@@ -35,8 +35,14 @@ function normalizeWhatsAppPhone(phone) {
   return digits;
 }
 
+function getClinicActivationURL(clinicName, code) {
+  const activationURL = new URL('./activate.html', document.baseURI);
+  activationURL.hash = new URLSearchParams({ clinic: clinicName, code }).toString();
+  return activationURL.href;
+}
+
 function getClinicActivationMessage(clinicName, code) {
-  const activationURL = new URL('activate.html', window.location.href).href;
+  const activationURL = getClinicActivationURL(clinicName, code);
   return [
     `مرحباً، تمت الموافقة على عيادتكم «${clinicName}» في منصة صحتنا.`,
     `كود التفعيل: ${code}`,
@@ -51,7 +57,12 @@ function openClinicApprovalDialog(clinic, code) {
 
   const clinicName = clinic?.name || 'العيادة';
   const phone = normalizeWhatsAppPhone(clinic?.phone);
-  activeClinicApproval = { clinicName, code, phone };
+  activeClinicApproval = {
+    clinicName,
+    code,
+    phone,
+    activationURL: getClinicActivationURL(clinicName, code),
+  };
   approvalDialogPreviousFocus = document.activeElement;
 
   document.getElementById('approvedClinicName').textContent = clinicName;
@@ -77,15 +88,13 @@ function closeClinicApprovalDialog() {
   approvalDialogPreviousFocus = null;
 }
 
-async function copyClinicActivationCode() {
-  if (!activeClinicApproval?.code) return;
-  const code = activeClinicApproval.code;
+async function copyText(value, successMessage) {
   try {
     if (navigator.clipboard?.writeText) {
-      await navigator.clipboard.writeText(code);
+      await navigator.clipboard.writeText(value);
     } else {
       const input = document.createElement('textarea');
-      input.value = code;
+      input.value = value;
       input.setAttribute('readonly', '');
       input.style.position = 'fixed';
       input.style.opacity = '0';
@@ -94,11 +103,21 @@ async function copyClinicActivationCode() {
       document.execCommand('copy');
       input.remove();
     }
-    showToast('تم نسخ كود التفعيل', 'success');
+    showToast(successMessage, 'success');
   } catch (error) {
     console.error('Copy activation code failed:', error);
     showToast('تعذر النسخ تلقائياً. ظلل الكود وانسخه', 'error');
   }
+}
+
+async function copyClinicActivationCode() {
+  if (!activeClinicApproval?.code) return;
+  await copyText(activeClinicApproval.code, 'تم نسخ كود التفعيل');
+}
+
+async function copyClinicActivationLink() {
+  if (!activeClinicApproval?.activationURL) return;
+  await copyText(activeClinicApproval.activationURL, 'تم نسخ رابط التفعيل الكامل');
 }
 
 function sendClinicActivationViaWhatsApp() {
