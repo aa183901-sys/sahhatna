@@ -388,6 +388,17 @@ body.dialog-open {
 .approval-dialog-actions button {
   min-height: 48px;
 }
+.approval-link-button {
+  border: 1px solid #0f766e;
+  border-radius: 10px;
+  background: #fff;
+  color: #0f766e;
+  font-weight: 700;
+  cursor: pointer;
+}
+.approval-link-button:hover {
+  background: #f0fdfa;
+}
 .approval-whatsapp-button {
   border: 0;
   border-radius: 10px;
