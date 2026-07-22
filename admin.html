@@ -216,6 +216,46 @@
     </div>
   </div>
 
+  <!-- Clinic approval result dialog -->
+  <div id="clinicApprovalDialog" class="approval-dialog hidden" aria-hidden="true">
+    <button
+      type="button"
+      class="approval-dialog-backdrop"
+      aria-label="إغلاق نافذة كود التفعيل"
+      onclick="closeClinicApprovalDialog()"
+    ></button>
+    <section
+      class="approval-dialog-card"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="clinicApprovalTitle"
+      aria-describedby="clinicApprovalDescription"
+    >
+      <button type="button" class="approval-dialog-close" onclick="closeClinicApprovalDialog()" aria-label="إغلاق">×</button>
+      <div class="approval-dialog-icon" aria-hidden="true">✓</div>
+      <h2 id="clinicApprovalTitle">تمت الموافقة على العيادة</h2>
+      <p id="clinicApprovalDescription">
+        أصبحت <strong id="approvedClinicName"></strong> جاهزة للتفعيل. أرسل الكود للعيادة بطريقة آمنة.
+      </p>
+
+      <div class="approval-code-box">
+        <span>كود التفعيل</span>
+        <strong id="approvedClinicCode" dir="ltr"></strong>
+      </div>
+
+      <div class="approval-dialog-actions">
+        <button id="copyClinicCode" type="button" class="btn-primary" onclick="copyClinicActivationCode()">
+          نسخ الكود
+        </button>
+        <button id="sendClinicCodeWhatsApp" type="button" class="approval-whatsapp-button" onclick="sendClinicActivationViaWhatsApp()">
+          إرسال عبر واتساب
+        </button>
+      </div>
+
+      <p class="approval-dialog-note">الكود مخصص للاستخدام مرة واحدة. لا تنشره أو ترسله لشخص غير مسؤول العيادة.</p>
+    </section>
+  </div>
+
   <!-- Toast Container -->
   <div id="toastContainer"></div>
 
