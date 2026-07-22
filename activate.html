@@ -25,19 +25,19 @@
       <div class="text-center mb-6">
         <div class="w-16 h-16 bg-primary rounded-2xl flex items-center justify-center text-white text-3xl font-bold mx-auto mb-3">+</div>
         <h1 class="text-2xl font-bold text-gray-800">تفعيل حساب العيادة</h1>
-        <p class="text-gray-500 mt-1">أدخل رمز التفعيل الذي حصلت عليه من الإدارة</p>
+        <p class="text-gray-500 mt-1">افتح رابط التفعيل المرسل من الإدارة لتعبئة بيانات العيادة تلقائياً</p>
       </div>
 
       <form onsubmit="handleActivate(event)" class="space-y-4">
         <div>
           <label class="block text-sm font-semibold text-gray-600 mb-1">اسم العيادة <span class="text-danger">*</span></label>
           <input type="text" id="activateClinicName" required autocomplete="organization" placeholder="مثال: مركز الشفاء الطبي" class="form-input" />
-          <p class="text-xs text-gray-400 mt-1">يجب أن يطابق الاسم المسجل لدى الإدارة</p>
+          <p class="text-xs text-gray-400 mt-1">يُعبّأ تلقائياً عند فتح رابط التفعيل الكامل</p>
         </div>
         <div>
           <label class="block text-sm font-semibold text-gray-600 mb-1">رمز التفعيل <span class="text-danger">*</span></label>
           <input type="text" id="activateCode" required autocomplete="one-time-code" placeholder="ABC123" maxlength="6" class="form-input text-center text-2xl tracking-widest font-bold uppercase" style="letter-spacing: 0.3em;" />
-          <p class="text-xs text-gray-400 mt-1">6 محارف (أحرف كبيرة + أرقام)</p>
+          <p class="text-xs text-gray-400 mt-1">يُعبّأ تلقائياً مع اسم العيادة من الرابط الآمن</p>
         </div>
         <div>
           <label class="block text-sm font-semibold text-gray-600 mb-1">اسم المستخدم <span class="text-danger">*</span></label>
@@ -62,7 +62,7 @@
 
       <div class="mt-6 bg-info-light rounded-xl p-4 text-sm">
         <p class="font-semibold text-info mb-1">ℹ️ كيف أحصل على رمز التفعيل؟</p>
-        <p class="text-gray-600">بعد تسجيل عيادتك وموافقة الإدارة، يصلك رمز التفعيل. استخدمه هنا لإنشاء حساب الدخول.</p>
+        <p class="text-gray-600">بعد موافقة الإدارة يصلك رابط تفعيل كامل. افتحه مباشرة ولا تكتب اسم العيادة أو الكود يدوياً.</p>
       </div>
 
       <div class="mt-4 text-center">

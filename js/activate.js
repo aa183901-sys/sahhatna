@@ -17,6 +17,26 @@ function showToast(message, type = 'success') {
   }, 4000);
 }
 
+function prefillActivationDetails() {
+  const params = new URLSearchParams(window.location.hash.slice(1));
+  const clinicName = (params.get('clinic') || '').trim();
+  const activationCode = (params.get('code') || '').trim().toUpperCase();
+  const clinicNameInput = document.getElementById('activateClinicName');
+  const codeInput = document.getElementById('activateCode');
+
+  if (clinicName && clinicNameInput) {
+    clinicNameInput.value = clinicName;
+    clinicNameInput.readOnly = true;
+    clinicNameInput.setAttribute('aria-readonly', 'true');
+  }
+
+  if (/^[A-Z0-9]{6}$/.test(activationCode) && codeInput) {
+    codeInput.value = activationCode;
+    codeInput.readOnly = true;
+    codeInput.setAttribute('aria-readonly', 'true');
+  }
+}
+
 async function handleActivate(event) {
   event.preventDefault();
 
@@ -74,6 +94,7 @@ async function handleActivate(event) {
 
 // Auto-uppercase the activation code input
 document.addEventListener('DOMContentLoaded', () => {
+  prefillActivationDetails();
   const codeInput = document.getElementById('activateCode');
   if (codeInput) {
     codeInput.addEventListener('input', (e) => {
