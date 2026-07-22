@@ -24,15 +24,15 @@
 <body class="bg-gray-50 min-h-screen">
 
   <!-- ===== Login Screen ===== -->
-  <div id="loginScreen" class="min-h-screen flex items-center justify-center p-4">
-    <div class="bg-white rounded-2xl shadow-xl p-8 max-w-md w-full">
-      <div class="text-center mb-6">
-        <div class="w-16 h-16 bg-primary rounded-2xl flex items-center justify-center text-white text-3xl font-bold mx-auto mb-3">+</div>
+  <div id="loginScreen" class="auth-shell min-h-screen flex items-center justify-center p-4">
+    <div class="auth-card bg-white rounded-2xl shadow-xl p-8 max-w-md w-full">
+      <div class="auth-header text-center mb-6">
+        <div class="auth-icon w-16 h-16 bg-primary rounded-2xl flex items-center justify-center text-white text-3xl font-bold mx-auto mb-3">+</div>
         <h1 class="text-2xl font-bold text-gray-800">لوحة تحكم العيادة</h1>
         <p class="text-gray-500 mt-1">سجّل دخولك لإدارة حجوزاتك</p>
       </div>
 
-      <form onsubmit="handleClinicLogin(event)" class="space-y-4">
+      <form onsubmit="handleClinicLogin(event)" class="auth-form space-y-4">
         <div>
           <label class="block text-sm font-semibold text-gray-600 mb-1">البريد الإلكتروني أو اسم مستخدم العرض</label>
           <input type="text" id="loginUsername" required autocomplete="username" placeholder="clinic@example.com" class="form-input" />
@@ -45,7 +45,7 @@
       </form>
 
       <!-- Demo credentials -->
-      <div id="clinicDemoCredentials" class="mt-6 bg-info-light rounded-xl p-4 text-sm">
+      <div id="clinicDemoCredentials" class="auth-help mt-6 bg-info-light rounded-xl p-4 text-sm">
         <p class="font-semibold text-info mb-2">🔑 حسابات تجريبية:</p>
         <div class="space-y-1 text-gray-600">
           <p>• مركز الشفاء: <code class="bg-white px-2 py-0.5 rounded">cl1 / 1234</code></p>
