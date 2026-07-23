@@ -34,14 +34,14 @@
   }
   </script>
   <link rel="stylesheet" href="css/tailwind.generated.css" />
-  <!-- Google Fonts: Cairo -->
+  <!-- Google Fonts: Tajawal -->
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
 
   <!-- Custom Styles -->
-  <link rel="stylesheet" href="css/styles.css" />
   <link rel="stylesheet" href="css/mobile.css" />
+  <link rel="stylesheet" href="css/styles.css" />
 
   <!-- PWA -->
   <link rel="manifest" href="manifest.json" />
@@ -49,7 +49,7 @@
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-title" content="صحتنا" />
 </head>
-<body class="min-h-screen">
+<body class="min-h-screen site-home">
 
   <!-- ===== Header ===== -->
   <header class="bg-white shadow-sm sticky top-0 z-40">
@@ -231,6 +231,20 @@
       </div>
     </div>
 
+    <!-- Quick specialties: kept close to search for an app-like first screen -->
+    <section id="specialties" class="home-specialties mt-5" aria-labelledby="specialtiesTitle">
+      <div class="section-title-row">
+        <div>
+          <h3 id="specialtiesTitle" class="text-xl font-bold text-gray-800">التخصصات</h3>
+          <p class="text-sm text-gray-500">اختَر بسرعة التخصص الذي تحتاجه</p>
+        </div>
+        <a href="#search" class="text-sm text-primary font-bold">عرض الأطباء</a>
+      </div>
+      <div id="specialtiesGrid" class="grid grid-cols-3 md:grid-cols-6 gap-4">
+        <!-- Specialty cards injected here -->
+      </div>
+    </section>
+
     <!-- Results -->
     <div class="mt-6">
       <div class="flex items-center justify-between mb-4">
@@ -246,17 +260,6 @@
       </div>
       <div id="doctorsList" class="grid md:grid-cols-2 gap-4">
         <!-- Doctor cards injected here -->
-      </div>
-    </div>
-  </section>
-
-  <!-- ===== Specialties Section ===== -->
-  <section id="specialties" class="bg-white py-12">
-    <div class="max-w-7xl mx-auto px-4 sm:px-6">
-      <h3 class="text-2xl font-bold text-gray-800 text-center mb-2">تصفح حسب التخصص</h3>
-      <p class="text-gray-500 text-center mb-8">اختر التخصص المناسب لاحتياجك الصحية</p>
-      <div id="specialtiesGrid" class="grid grid-cols-3 md:grid-cols-6 gap-4">
-        <!-- Specialty cards injected here -->
       </div>
     </div>
   </section>
@@ -342,6 +345,14 @@
       </div>
     </div>
   </footer>
+
+  <!-- ===== Mobile App Navigation ===== -->
+  <nav class="mobile-app-nav" aria-label="التنقل الرئيسي على الهاتف">
+    <a href="index.html" class="active"><span aria-hidden="true">⌂</span><b>الرئيسية</b></a>
+    <a href="#search"><span aria-hidden="true">⌕</span><b>البحث</b></a>
+    <a href="my-bookings.html"><span aria-hidden="true">▣</span><b>حجوزاتي</b></a>
+    <a href="clinic.html"><span aria-hidden="true">✚</span><b>العيادة</b></a>
+  </nav>
 
   <!-- ===== Doctor Profile & Booking Modal ===== -->
   <div id="doctorModal" class="hidden"></div>

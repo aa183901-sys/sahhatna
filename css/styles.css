@@ -62,7 +62,7 @@
 }
 
 body {
-  font-family: 'Cairo', 'Tajawal', system-ui, -apple-system, sans-serif;
+  font-family: 'Tajawal', 'Cairo', system-ui, -apple-system, sans-serif;
   background-color: #f0fdfa;
   color: var(--gray-800);
 }
@@ -761,4 +761,424 @@ body.dialog-open {
 }
 @media (min-width: 641px) {
   .show-mobile-only { display: none; }
+}
+
+/* ======================================================================
+   صحتنا 2026 — compact application redesign
+   Visual layer only: all existing IDs, forms and Supabase flows stay intact.
+   ====================================================================== */
+:root {
+  --app-teal: #087f73;
+  --app-teal-dark: #05645c;
+  --app-ink: #16252d;
+  --app-muted: #657780;
+  --app-canvas: #f3f7f8;
+  --app-surface: #ffffff;
+  --app-line: #dde7e9;
+  --app-radius: 14px;
+  --app-shadow: 0 8px 28px rgba(25, 58, 66, 0.08);
+}
+
+body {
+  background: var(--app-canvas);
+  color: var(--app-ink);
+  font-size: 15px;
+  line-height: 1.55;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+.form-input {
+  min-height: 44px;
+  padding: 9px 12px;
+  border: 1px solid #d7e2e5;
+  border-radius: 10px;
+  color: var(--app-ink);
+  box-shadow: none;
+}
+
+.form-input:focus {
+  border-color: var(--app-teal);
+  box-shadow: 0 0 0 3px rgba(8, 127, 115, 0.12);
+}
+
+.btn-primary,
+.btn-secondary,
+.btn-accent,
+.btn-danger,
+.btn-success {
+  min-height: 42px;
+  border-radius: 10px;
+  padding: 9px 18px;
+  font-weight: 700;
+  box-shadow: none;
+}
+
+.btn-primary { background: var(--app-teal); }
+.btn-primary:hover { background: var(--app-teal-dark); box-shadow: none; }
+.btn-secondary { color: var(--app-teal); border-width: 1px; border-color: var(--app-teal); }
+
+.stat-card,
+.doctor-card,
+.booking-item {
+  border: 1px solid var(--app-line);
+  border-radius: var(--app-radius);
+  box-shadow: none;
+}
+
+.stat-card { padding: 15px; }
+.doctor-card { border-color: var(--app-line); }
+.doctor-card:hover { transform: translateY(-1px); box-shadow: var(--app-shadow); }
+
+/* Home */
+.site-home > header {
+  border-bottom: 1px solid var(--app-line);
+  box-shadow: none;
+  background: rgba(255, 255, 255, 0.96);
+  backdrop-filter: blur(12px);
+}
+
+.site-home > header .h-16 { height: 62px; }
+.site-home > header .w-10.h-10 {
+  width: 38px;
+  height: 38px;
+  border-radius: 11px;
+  background: var(--app-teal);
+}
+
+.site-home > section:first-of-type {
+  color: var(--app-ink);
+  background: transparent;
+}
+
+.site-home > section:first-of-type > div {
+  padding-top: 30px;
+  padding-bottom: 20px;
+}
+
+.site-home > section:first-of-type .grid {
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0;
+}
+
+.site-home > section:first-of-type h2 {
+  max-width: 740px;
+  margin-bottom: 8px;
+  font-size: clamp(1.65rem, 4vw, 2.6rem);
+  line-height: 1.25;
+  color: var(--app-ink);
+}
+
+.site-home .hero-subtitle {
+  max-width: 720px;
+  margin-bottom: 16px;
+  color: var(--app-muted) !important;
+  font-size: 1rem;
+  line-height: 1.75;
+}
+
+.site-home > section:first-of-type .border-white\/80 {
+  border: 1px solid var(--app-line);
+  color: var(--app-teal);
+  background: white;
+}
+
+.site-home > section:first-of-type .border-white\/80:hover {
+  color: var(--app-teal-dark);
+  background: #e9f7f5;
+}
+
+.site-home .btn-accent {
+  color: white;
+  background: var(--app-teal);
+}
+
+.site-home .btn-accent:hover { background: var(--app-teal-dark); }
+.site-home .hero-illustration,
+.site-home .hero-wave { display: none !important; }
+
+.site-home > section:first-of-type .grid.grid-cols-3 {
+  display: inline-grid;
+  grid-template-columns: repeat(3, minmax(95px, 1fr));
+  gap: 0;
+  margin-top: 20px;
+  overflow: hidden;
+  border: 1px solid var(--app-line);
+  border-radius: 12px;
+  background: white;
+}
+
+.site-home > section:first-of-type .grid.grid-cols-3 > div {
+  padding: 10px 16px;
+  border-inline-start: 1px solid var(--app-line);
+}
+
+.site-home > section:first-of-type .grid.grid-cols-3 > div:last-child { border-inline-start: 0; }
+.site-home > section:first-of-type .grid.grid-cols-3 .text-2xl { color: var(--app-teal); font-size: 1.15rem; }
+.site-home > section:first-of-type .grid.grid-cols-3 .text-sm { color: var(--app-muted); font-size: .72rem; }
+
+.site-home #search {
+  padding-top: 6px;
+  padding-bottom: 32px;
+}
+
+.search-bar-card {
+  margin-top: 0 !important;
+  padding: 18px;
+  border: 1px solid var(--app-line);
+  border-radius: var(--app-radius);
+  box-shadow: var(--app-shadow);
+}
+
+.search-bar-card label { color: #52656e; }
+.search-bar-card .border-t { border-color: var(--app-line); }
+
+.home-specialties {
+  padding: 18px;
+  border: 1px solid var(--app-line);
+  border-radius: var(--app-radius);
+  background: var(--app-surface);
+}
+
+.section-title-row {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 13px;
+}
+
+#specialtiesGrid button {
+  min-height: 94px;
+  padding: 12px 8px;
+  border: 1px solid var(--app-line);
+  border-radius: 12px;
+  background: #f8fbfb;
+}
+
+#specialtiesGrid button:hover {
+  border-color: #8fcac4;
+  background: #edf8f6;
+}
+
+#specialtiesGrid button > div:first-child { margin-bottom: 4px; font-size: 1.55rem; }
+.site-home #doctorsList { gap: 12px; }
+.site-home .doctor-card { padding: 14px; border-radius: var(--app-radius); }
+.site-home .doctor-card img { width: 68px; height: 68px; border-radius: 12px; }
+.site-home .doctor-card .badge { padding: 2px 8px; }
+
+.site-home #how-it-works { padding-top: 24px; padding-bottom: 28px; }
+.site-home #how-it-works > .grid { gap: 12px; }
+.site-home #how-it-works > .grid > div { padding: 18px; border-radius: var(--app-radius); }
+.site-home #how-it-works .w-16.h-16 { width: 48px; height: 48px; margin-bottom: 10px; border-radius: 12px; font-size: 1.35rem; }
+.site-home footer { margin-top: 0; }
+
+.mobile-app-nav { display: none; }
+
+/* Authentication and operational portals */
+.portal-page,
+.auth-page { background: var(--app-canvas) !important; }
+
+.portal-page > [id$="Screen"],
+.auth-page > .min-h-screen {
+  background:
+    radial-gradient(circle at 85% 8%, rgba(8, 127, 115, .12), transparent 30%),
+    var(--app-canvas);
+}
+
+.portal-page > [id$="Screen"] > div,
+.auth-page > .min-h-screen > div,
+.bookings-portal #loginSection > div {
+  padding: 24px;
+  border: 1px solid var(--app-line);
+  border-radius: 18px;
+  box-shadow: var(--app-shadow);
+}
+
+.portal-page > [id$="Screen"] .w-16.h-16,
+.auth-page .w-16.h-16,
+.bookings-portal .w-16.h-16 {
+  width: 50px;
+  height: 50px;
+  margin-bottom: 10px;
+  border-radius: 13px;
+  font-size: 1.5rem;
+}
+
+.portal-page > [id$="Screen"] .mb-6,
+.auth-page .mb-6,
+.bookings-portal .mb-6 { margin-bottom: 18px; }
+
+.portal-page > [id$="Screen"] h1,
+.auth-page h1,
+.bookings-portal h2 { font-size: 1.5rem; }
+
+.portal-page #dashboard > header,
+.portal-page #adminDashboard > header,
+.bookings-portal > header {
+  border-bottom: 1px solid var(--app-line);
+  box-shadow: none;
+}
+
+.portal-page #dashboard > header .h-16,
+.portal-page #adminDashboard > header .h-16,
+.bookings-portal > header .h-16 { height: 60px; }
+
+.portal-page #dashboard > .max-w-7xl,
+.portal-page #adminDashboard > .max-w-7xl { padding-top: 18px; padding-bottom: 28px; }
+
+.portal-page .tab-btn {
+  flex: 0 0 auto;
+  padding: 12px 16px;
+  border-bottom-width: 2px;
+  white-space: nowrap;
+}
+
+.portal-page .tab-content { background: white; }
+.portal-page .cal-day { min-height: 82px; }
+.bookings-portal #bookingsSection { padding-bottom: 36px; }
+.bookings-portal .filter-tab { padding: 8px 14px; border: 1px solid var(--app-line); border-radius: 999px; }
+.bookings-portal .filter-tab.active { border-color: var(--app-teal); }
+
+.modal-overlay { background: rgba(7, 25, 31, .58); backdrop-filter: blur(3px); }
+.modal-content { border-radius: 18px; box-shadow: 0 24px 80px rgba(7, 25, 31, .24); }
+.toast { bottom: 24px; border-radius: 10px; font-size: .9rem; }
+
+@media (max-width: 767px) {
+  body { font-size: 14px; }
+  .site-home { padding-bottom: 68px; }
+  .site-home > header .h-16 { height: 56px; }
+  .site-home > header .w-10.h-10 { width: 34px; height: 34px; }
+  .site-home > header h1 { font-size: 1.05rem; }
+  .site-home > header p { display: none; }
+
+  .site-home > section:first-of-type > div { padding-top: 18px; padding-bottom: 12px; }
+  .site-home > section:first-of-type h2 { margin-bottom: 6px; font-size: 1.45rem; line-height: 1.35; }
+  .site-home .hero-subtitle { margin-bottom: 12px; font-size: .88rem; line-height: 1.65; }
+  .site-home > section:first-of-type .flex.flex-wrap.gap-3 { gap: 8px; }
+  .site-home > section:first-of-type .btn-accent,
+  .site-home > section:first-of-type .border-white\/80 { min-height: 40px; padding: 8px 14px; border-radius: 9px; }
+
+  .site-home > section:first-of-type .grid.grid-cols-3 {
+    display: grid;
+    width: 100%;
+    margin-top: 14px;
+    border-radius: 10px;
+  }
+  .site-home > section:first-of-type .grid.grid-cols-3 > div { padding: 8px 5px; }
+  .site-home > section:first-of-type .grid.grid-cols-3 .text-2xl { font-size: 1rem; }
+  .site-home > section:first-of-type .grid.grid-cols-3 .text-sm { font-size: .65rem; }
+
+  .site-home #search { padding: 4px 12px 22px; }
+  .search-bar-card { padding: 13px; border-radius: 13px; box-shadow: 0 5px 18px rgba(25, 58, 66, .07); }
+  .search-bar-card .grid { gap: 9px; }
+  .search-bar-card label { margin-bottom: 3px; font-size: .75rem; }
+  .search-bar-card .form-input { min-height: 41px; padding: 8px 10px; font-size: .84rem; }
+  .search-bar-card > .flex { gap: 8px; margin-top: 11px; padding-top: 10px; }
+  .search-bar-card > .flex > span { width: 100%; }
+  .search-bar-card > .flex label { padding: 5px 8px; border: 1px solid var(--app-line); border-radius: 8px; background: #f8fbfb; }
+
+  .home-specialties { margin-top: 12px; padding: 13px 0 13px 13px; border-radius: 13px; }
+  .home-specialties .section-title-row { padding-right: 13px; margin-bottom: 10px; }
+  .home-specialties h3 { font-size: 1rem; }
+  .home-specialties p { font-size: .72rem; }
+  #specialtiesGrid {
+    display: flex;
+    gap: 8px;
+    padding-right: 13px;
+    padding-bottom: 2px;
+    overflow-x: auto;
+    scroll-snap-type: x mandatory;
+    scrollbar-width: none;
+  }
+  #specialtiesGrid::-webkit-scrollbar { display: none; }
+  #specialtiesGrid button { flex: 0 0 94px; min-height: 78px; padding: 9px 6px; scroll-snap-align: start; }
+  #specialtiesGrid button > div:first-child { font-size: 1.35rem; }
+  #specialtiesGrid button > div:last-child { font-size: .72rem; }
+
+  .site-home #search > .mt-6 { margin-top: 16px; }
+  .site-home #search > .mt-6 > .flex { align-items: end; margin-bottom: 9px; }
+  .site-home #search > .mt-6 h3 { font-size: 1rem; }
+  .site-home #sortBy { max-width: 142px; min-height: 38px; padding: 7px 8px; font-size: .75rem; }
+  .site-home #doctorsList { display: flex; gap: 10px; overflow-x: auto; scroll-snap-type: x mandatory; scrollbar-width: none; }
+  .site-home #doctorsList::-webkit-scrollbar { display: none; }
+  .site-home .doctor-card { flex: 0 0 min(88vw, 350px); padding: 12px; scroll-snap-align: start; }
+  .site-home .doctor-card > .flex { gap: 10px; }
+  .site-home .doctor-card img { width: 60px; height: 60px; }
+  .site-home .doctor-card .flex.items-center.gap-3 { gap: 6px; font-size: .75rem; }
+  .site-home .doctor-card .star-rating { gap: 0; }
+  .site-home .doctor-card .badge { font-size: .65rem; }
+
+  .site-home #how-it-works { padding: 20px 12px; }
+  .site-home #how-it-works > h3 { font-size: 1.1rem; }
+  .site-home #how-it-works > p { margin-bottom: 14px; font-size: .78rem; }
+  .site-home #how-it-works > .grid { display: flex; gap: 8px; overflow-x: auto; scroll-snap-type: x mandatory; scrollbar-width: none; }
+  .site-home #how-it-works > .grid > div { flex: 0 0 76vw; padding: 14px; scroll-snap-align: start; }
+  .site-home footer { padding-top: 24px; padding-bottom: 30px; }
+  .site-home footer > div > .grid { gap: 12px; }
+  .site-home footer > div > .grid > :not(:first-child) { display: none; }
+  .site-home footer > div > .grid > :first-child p { margin-top: 6px; font-size: .72rem; line-height: 1.55; }
+  .site-home footer .flex.justify-center.gap-4 { margin-top: 16px; }
+
+  .mobile-app-nav {
+    position: fixed;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    z-index: 45;
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    min-height: calc(62px + env(safe-area-inset-bottom));
+    padding: 5px 4px env(safe-area-inset-bottom);
+    border-top: 1px solid var(--app-line);
+    background: rgba(255, 255, 255, .97);
+    box-shadow: 0 -6px 24px rgba(25, 58, 66, .08);
+    backdrop-filter: blur(14px);
+  }
+  .mobile-app-nav a { display: grid; place-items: center; align-content: center; gap: 1px; color: #71818a; }
+  .mobile-app-nav a span { font-size: 1.25rem; line-height: 1; }
+  .mobile-app-nav a b { font-size: .66rem; }
+  .mobile-app-nav a.active { color: var(--app-teal); }
+
+  .portal-page > [id$="Screen"],
+  .auth-page > .min-h-screen,
+  .bookings-portal #loginSection { align-items: flex-start; min-height: 100vh; padding: 16px 12px; }
+  .portal-page > [id$="Screen"] > div,
+  .auth-page > .min-h-screen > div,
+  .bookings-portal #loginSection > div { max-width: 420px; padding: 18px 15px; border-radius: 15px; }
+  .portal-page > [id$="Screen"] .space-y-4,
+  .auth-page .space-y-4 { gap: 0; }
+  .portal-page > [id$="Screen"] .space-y-4 > :not([hidden]) ~ :not([hidden]),
+  .auth-page .space-y-4 > :not([hidden]) ~ :not([hidden]) { margin-top: 10px; }
+  .portal-page #dashboard > .max-w-7xl,
+  .portal-page #adminDashboard > .max-w-7xl { padding: 14px 10px 24px; }
+  .portal-page #dashboard h2,
+  .portal-page #adminDashboard h2 { font-size: 1.25rem; }
+  .portal-page #dashboard > .max-w-7xl > .mb-6,
+  .portal-page #adminDashboard > .max-w-7xl > .mb-6 { margin-bottom: 12px; }
+  .portal-page .grid.grid-cols-2.md\:grid-cols-4 { gap: 8px; margin-bottom: 12px; }
+  .portal-page .stat-card { padding: 11px; border-radius: 12px; }
+  .portal-page .stat-card .text-3xl { font-size: 1.35rem; }
+  .portal-page .stat-card .text-2xl { font-size: 1.2rem; }
+  .portal-page .tab-btn { padding: 10px 12px; font-size: .78rem; }
+  .portal-page .tab-content { padding: 12px; }
+  .portal-page .booking-item { padding: 10px; border-radius: 11px; }
+  .portal-page .cal-day { min-height: 58px; font-size: .7rem; }
+
+  .activation-page > .min-h-screen { justify-content: flex-start; padding-top: 12px; }
+  .activation-page .bg-info-light { padding: 11px; }
+  .bookings-portal #loginSection { min-height: calc(100vh - 60px); }
+  .modal-overlay { align-items: flex-end; padding: 0; }
+  .modal-content { max-height: 88vh; border-radius: 20px 20px 0 0; animation: slideUp .25s ease-out; }
+  .toast { bottom: 78px; width: calc(100% - 24px); max-width: 430px; padding: 10px 14px; }
+}
+
+@media (min-width: 768px) {
+  .site-home #doctorsList { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .site-home .doctor-card .w-20.h-20 { width: 64px; height: 64px; }
 }

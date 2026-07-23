@@ -3,7 +3,7 @@
  * Enables offline functionality and install-to-home-screen
  */
 
-const CACHE_NAME = 'sahatna-v19';
+const CACHE_NAME = 'sahatna-v20-app-redesign';
 const ASSETS = [
   './',
   './index.html',
